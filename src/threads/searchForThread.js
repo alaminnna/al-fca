@@ -1,6 +1,6 @@
 "use strict";
 
-const utils = require("../utils");
+const utils = require("../../utils");
 
 module.exports = function (defaultFuncs, api, ctx) {
   return function searchForThread(name, callback) {
@@ -51,3 +51,4 @@ module.exports = function (defaultFuncs, api, ctx) {
     return returnPromise;
   };
 };
+

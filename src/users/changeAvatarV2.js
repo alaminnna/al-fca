@@ -1,7 +1,7 @@
 
 "use strict";
 
-var utils = require("../utils");
+var utils = require("../../utils");
 // @NethWs3Dev
 /**
  * It posts an image to a Facebook profile
@@ -84,3 +84,4 @@ module.exports = function(defaultFuncs, api, ctx) {
         return returnPromise;
     };
 };
+

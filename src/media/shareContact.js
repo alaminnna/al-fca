@@ -3,7 +3,7 @@
 
 // fixed by kenneth panio
 
-var utils = require("../utils");
+var utils = require("../../utils");
 
 module.exports = function(defaultFuncs, api, ctx) {
   return function shareContact(text, senderID, threadID, callback) {
@@ -56,7 +56,7 @@ module.exports = function(defaultFuncs, api, ctx) {
 /*"use strict";
 
 
-var utils = require("../utils");
+var utils = require("../../utils");
 
 // @NethWs3Dev
 

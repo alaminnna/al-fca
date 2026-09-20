@@ -10,7 +10,7 @@
  */
 "use strict";
 
-const utils = require("../utils");
+const utils = require("../../utils");
 const log = require("npmlog");
 
 module.exports = function (defaultFuncs, api, ctx) {

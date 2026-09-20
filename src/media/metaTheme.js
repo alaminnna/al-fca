@@ -23,7 +23,7 @@
 
 "use strict";
 
-const utils = require("../utils");
+const utils = require("../../utils");
 const log = require("npmlog");
 /** © Sheikh Tamim - Please give proper credits if you copy or reuse this code. */
 module.exports = function (defaultFuncs, api, ctx) {
@@ -188,3 +188,4 @@ module.exports = function (defaultFuncs, api, ctx) {
 };
 
 /** © Sheikh Tamim - Please give proper credits if you copy or reuse this code. */
+

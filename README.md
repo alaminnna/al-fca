@@ -16,7 +16,7 @@
 
 🔐 Now with End-to-End Encryption (E2EE) — Signal Protocol + Noise, pure JavaScript, no native binary.
 
-[Installation](#-installation) • [Quick Start](#-basic-usage) • [E2EE Guide](./E2EE_GUIDE.md) • [npm](https://www.npmjs.com/package/al-fca) • [Issues](https://github.com/alaminnna/al-fca/issues)
+[Installation](#-installation) • [Basic Usage](#-basic-usage) • [E2EE Guide](./E2EE_GUIDE.md) • [npm](https://www.npmjs.com/package/al-fca) • [Issues](https://github.com/alaminnna/al-fca/issues)
 
 </div>
 
@@ -39,6 +39,7 @@
 - [Message Types](#-message-types)
 - [AppState](#-saving-appstate-to-avoid-re-login)
 - [Listening](#-listening-for-messages)
+- [Credits](#-credits)
 - [Author — Al A Min (Alaminnna)](#-author--al-a-min-alaminnna)
 
 </details>
@@ -137,12 +138,6 @@ Facebook now has an [official API for chat bots](https://developers.facebook.com
 - Making the exact same GET/POST requests as a browser
 - Does not work with auth tokens
 - Requires Facebook account credentials (email/password) or AppState
-
-## 📦 Installation
-
-```bash
-npm install al-fca@latest
-```
 
 ## 🚀 Basic Usage
 
@@ -623,6 +618,15 @@ api.changeThreadEmoji(emoji, threadID, callback);
 api.setMessageReaction(reaction, messageID, callback);
 ```
 
+## 🙏 Credits
+
+I built this on top of others' open-source work:
+
+- **[ST-FCA](https://github.com/sheikhtamimlover/ST-FCA)** — the original repo this project is based on.
+- **[FB-Messenger-E2EE](https://github.com/HerokeyVN/FB-Messenger-E2EE)** — the library behind the E2EE support here (Signal Protocol + Noise, pure JavaScript).
+
+Thanks to both maintainers for sharing their work openly.
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please:
@@ -691,5 +695,4 @@ If this project is helpful, please give it a ⭐ on GitHub — it helps others f
 
 </div>
 
-**Disclaimer:** This is an unofficial API and is not officially supported by Facebook. Use responsibly and comply with [Facebook Terms of Service](https://www.facebook.com/terms.php).#   a l - f c a  
- 
+**Disclaimer:** This is an unofficial API and is not officially supported by Facebook. Use responsibly and comply with [Facebook Terms of Service](https://www.facebook.com/terms.php).

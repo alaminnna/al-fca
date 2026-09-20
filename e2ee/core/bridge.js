@@ -15,7 +15,7 @@
  * The FME internals (Signal/Noise/protobuf/WA-binary) stay fully encapsulated.
  */
 
-var log = require("../src/logger");
+var log = require("../../src/core/logger");
 
 var { mapFmeEvent } = require("./fme/events");
 var { createFmeSession } = require("./fme/fme-client");

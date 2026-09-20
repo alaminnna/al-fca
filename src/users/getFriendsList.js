@@ -1,6 +1,6 @@
 "use strict";
 
-const utils = require("../utils");
+const utils = require("../../utils");
 // @NethWs3Dev
 
 // [almost] copy pasted from one of FB's minified file (GenderConst)
@@ -81,3 +81,4 @@ module.exports = function (defaultFuncs, api, ctx) {
     return returnPromise;
   };
 };
+

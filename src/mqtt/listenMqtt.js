@@ -1,12 +1,12 @@
 /* eslint-disable no-redeclare */
 "use strict";
-var utils = require("../utils");
+var utils = require("../../utils");
 var log = require("npmlog");
 var mqtt = require('mqtt');
 var WebSocket = require('ws');
 var Transform = require('stream').Transform;
 const EventEmitter = require('events');
-var e2eeBridge = require("../e2ee");
+var e2eeBridge = require("../../e2ee");
 
 // ─── ANSI colour helpers ───────────────────────────────────────────────────────
 var C = {

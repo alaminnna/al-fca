@@ -3,7 +3,7 @@
 const log = require("npmlog");
 const path = require("path");
 const mime = require("mime");
-const { parseAndCheckLogin, isReadableStream, getType } = require("../utils");
+const { parseAndCheckLogin, isReadableStream, getType } = require("../../utils");
 
 const UPLOAD_URL = "https://www.facebook.com/ajax/mercury/upload.php";
 
@@ -113,3 +113,4 @@ module.exports = function (defaultFuncs, api, ctx) {
         return returnPromise;
     };
 };
+

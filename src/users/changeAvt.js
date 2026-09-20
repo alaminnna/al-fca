@@ -1,6 +1,6 @@
 "use strict";
 
-var utils = require("../utils");
+var utils = require("../../utils");
 var log = require("npmlog");
 /**
  * It posts an image to a Facebook profile

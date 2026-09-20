@@ -10,7 +10,7 @@
  */
 "use strict";
 
-const utils = require("../utils");
+const utils = require("../../utils");
 
 module.exports = function (defaultFuncs, api, ctx) {
 /** Developed by Sheikh Tamim | GitHub: sheikhtamimlover | Instagram: @sheikh.tamim_lover */

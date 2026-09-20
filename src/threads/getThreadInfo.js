@@ -1,6 +1,6 @@
 "use strict";
 
-const utils = require("../utils");
+const utils = require("../../utils");
 const log = require("npmlog");
 
 function formatEventReminders(reminder) {

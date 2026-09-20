@@ -1,6 +1,6 @@
 "use strict";
 
-const utils = require("../utils");
+const utils = require("../../utils");
 const log = require("npmlog");
 
 function createProfileUrl(url, username, id) {
@@ -211,3 +211,4 @@ module.exports = function (defaultFuncs, api, ctx) {
     return returnPromise;
   };
 };
+
