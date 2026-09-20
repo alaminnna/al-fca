@@ -1,6 +1,6 @@
 "use strict";
 
-const { generateOfflineThreadingID } = require('../utils');
+const { generateOfflineThreadingID } = require('../../utils');
 
 function safeParseInt(value, fallback = 0) {
   const parsed = parseInt(value);

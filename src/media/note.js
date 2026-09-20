@@ -1,7 +1,7 @@
 
 "use strict";
 
-const utils = require('../utils');
+const utils = require('../../utils');
 
 /**
  * @description Enhanced module for interacting with Facebook Messenger Notes with additional features
