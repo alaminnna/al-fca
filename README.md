@@ -649,8 +649,9 @@ MIT License - See [LICENSE](./LICENSE) for details.
 
 <div align="center">
 
-<img src="https://github-readme-stats.vercel.app/api?username=alaminnna&show_icons=true&theme=tokyonight&hide_border=true&title_color=0A66FF" alt="Al A Min Alaminnna GitHub stats" width="49%"/>
-<img src="https://streak-stats.demolab.com?user=alaminnna&theme=tokyonight&hide_border=true" alt="Al A Min Alaminnna GitHub contribution streak" width="49%"/>
+<img src="https://github.com/alaminnna.png" alt="Al A Min Alaminnna profile photo" width="160"/>
+
+<img src="https://streak-stats.demolab.com?user=alaminnna&theme=tokyonight&hide_border=true" alt="Al A Min Alaminnna GitHub contribution streak" width="495"/>
 
 **Al A Min — Alaminnna**
 *AI Developer • Full Stack Web Developer • Student • Entrepreneur • Open Source Builder*
