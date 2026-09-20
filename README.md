@@ -16,7 +16,7 @@
 
 🔐 Now with End-to-End Encryption (E2EE) — Signal Protocol + Noise, pure JavaScript, no native binary.
 
-[Installation](#-installation) • [Basic Usage](#-basic-usage) • [E2EE Guide](./E2EE_GUIDE.md) • [npm](https://www.npmjs.com/package/al-fca) • [Issues](https://github.com/alaminnna/al-fca/issues)
+[Installation](#-installation) • [Basic Usage](#-basic-usage) • [E2EE Guide](docs/E2EE_GUIDE.md) • [npm](https://www.npmjs.com/package/al-fca) • [Issues](https://github.com/alaminnna/al-fca/issues)
 
 </div>
 
@@ -434,7 +434,7 @@ Commands:
 
 ### Full E2EE Documentation
 
-See [E2EE_GUIDE.md](./E2EE_GUIDE.md) for comprehensive documentation including:
+See [E2EE_GUIDE.md](docs/E2EE_GUIDE.md) for comprehensive documentation including:
 - ✅ System architecture
 - ✅ All API methods
 - ✅ Event types reference
@@ -584,7 +584,7 @@ AL-FCA can be used for any Facebook Messenger bot project or automation tool. If
 ## 📚 Full API Documentation
 
 - **Quick Reference** below covers the most common API methods with examples
-- **E2EE**: see [E2EE_GUIDE.md](./E2EE_GUIDE.md) for architecture, API methods, event types, and troubleshooting
+- **E2EE**: see [E2EE_GUIDE.md](docs/E2EE_GUIDE.md) for architecture, API methods, event types, and troubleshooting
 - **Login options**: `online`, `selfListen`, `listenEvents`, `updatePresence`, `forceLogin`, `autoMarkDelivery`, `autoMarkRead`, `listenTyping`, `autoReconnect`, `emitReady`, `enableE2EE`, `logLevel`, `e2eeDevicePath`, `e2eeMediaCdnHost`
 - Every module in `src/` maps to one `api.<name>` method (see [index.js](./index.js) loader)
 

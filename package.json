@@ -10,7 +10,7 @@
     "utils.js",
     "checkUpdate.js",
     "e2eebot.js",
-    "E2EE_GUIDE.md",
+    "docs/E2EE_GUIDE.md",
     "!e2ee/**/*.map",
     "!e2ee/**/*.ts",
     "!config.json"

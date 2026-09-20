@@ -1,9 +1,6 @@
 node_modules/
 .stfca-e2ee/
 .al-fca-e2ee/
-FB-Messenger-E2EE/node_modules/
-FB-Messenger-E2EE/dist/
-FB-Messenger-E2EE/proto/
 
 # Secrets and local credentials — never commit
 cookie.txt
@@ -12,3 +9,17 @@ config.json
 appstate.json
 outbound_frames.log
 *.log
+
+# Mirror .npmignore — keep GitHub clean
+.replit
+replit.nix
+generated-icon.png
+li.js
+
+# Vendored build artifacts (runtime JS stays, maps + TS sources go)
+e2ee/vendor/**/*.map
+e2ee/vendor/**/*.ts
+
+# Agent / tool scratch — never commit
+.omo/
+.codegraph/
