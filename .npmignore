@@ -1,0 +1,20 @@
+
+node_modules
+.replit
+replit.nix
+.gitignore
+generated-icon.png
+li.js
+package-lock.json
+.git
+*.log
+
+# Secrets — never publish
+cookie.txt
+e2ee_device.json
+config.json
+appstate.json
+
+# Source maps and TS sources (vendored)
+*.map
+*.ts

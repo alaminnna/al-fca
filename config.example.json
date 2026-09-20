@@ -1,0 +1,26 @@
+{
+  "_comment": "AL-FCA example configuration. Copy to config.json and fill in your values. NEVER commit real credentials or device files.",
+  "appState": [],
+  "loginOptions": {
+    "online": true,
+    "selfListen": false,
+    "listenEvents": true,
+    "updatePresence": false,
+    "forceLogin": false,
+    "autoMarkDelivery": false,
+    "autoMarkRead": false,
+    "listenTyping": false,
+    "autoReconnect": true,
+    "emitReady": false,
+    "enableE2EE": false,
+    "logLevel": "info",
+    "e2eeDevicePath": "./.al-fca-e2ee/device.json",
+    "e2eeMediaCdnHost": "https://mmeg.facebook.com"
+  },
+  "e2ee": {
+    "enable": false,
+    "devicePath": "./.al-fca-e2ee/device.json"
+  },
+  "enableTypingIndicator": false,
+  "typingDuration": 4000
+}

@@ -1,0 +1,90 @@
+{
+  "name": "al-fca",
+  "version": "1.3.0",
+  "description": "AL-FCA — Unofficial Facebook Chat API for Node.js with Auto-Update System and End-to-End Encryption (E2EE) support",
+  "main": "index.js",
+  "files": [
+    "src/",
+    "e2ee/",
+    "index.js",
+    "utils.js",
+    "checkUpdate.js",
+    "e2eebot.js",
+    "E2EE_GUIDE.md",
+    "!e2ee/**/*.map",
+    "!e2ee/**/*.ts",
+    "!config.json"
+  ],
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "start": "node index.js",
+    "build:e2ee": "node scripts/build-e2ee.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alaminnna/al-fca.git"
+  },
+  "keywords": [
+    "facebook",
+    "chat",
+    "api",
+    "bot",
+    "messenger",
+    "unofficial",
+    "fca",
+    "al-fca",
+    "alfca",
+    "alamin",
+    "alaminnna",
+    "fbchatapi",
+    "fbchat",
+    "messenger-api",
+    "facebook-messenger",
+    "nodejs",
+    "javascript",
+    "auto-update",
+    "update-check",
+    "update-notifier",
+    "version-check",
+    "update-system",
+    "update-manager",
+    "update-handler",
+    "update-service",
+    "update-module",
+    "update-function",
+    "unofficial-facebook-chat-api",
+    "messengerwapper",
+    "e2ee",
+    "e2eefca",
+    "e2eesendmessage"
+  ],
+  "author": "Alamin",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/alaminnna/al-fca/issues"
+  },
+  "homepage": "https://github.com/alaminnna/al-fca#readme",
+  "dependencies": {
+    "@signalapp/libsignal-client": "0.70.0",
+    "axios": "^1.8.4",
+    "bluebird": "^3.7.2",
+    "chalk": "^4.1.2",
+    "cheerio": "^1.0.0-rc.10",
+    "duplexify": "^4.1.3",
+    "gradient-string": "^2.0.2",
+    "https-proxy-agent": "^7.0.6",
+    "mime": "^3.0.0",
+    "mqtt": "^5.10.1",
+    "npmlog": "^1.2.0",
+    "protobufjs": "^8.0.1",
+    "request": "^2.88.2",
+    "totp-generator": "^1.0.0",
+    "undici": "^8.4.0",
+    "ws": "^8.18.1",
+    "yumi-json-bigint": "^1.0.0"
+  },
+  "directories": {
+    "test": "test"
+  },
+  "devDependencies": {}
+}

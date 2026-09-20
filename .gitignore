@@ -1,0 +1,14 @@
+node_modules/
+.stfca-e2ee/
+.al-fca-e2ee/
+FB-Messenger-E2EE/node_modules/
+FB-Messenger-E2EE/dist/
+FB-Messenger-E2EE/proto/
+
+# Secrets and local credentials — never commit
+cookie.txt
+e2ee_device.json
+config.json
+appstate.json
+outbound_frames.log
+*.log
