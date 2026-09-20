@@ -3,7 +3,7 @@
 * @author RFS-ADRENO
 * @rewrittenBy Isai Ivanov
 */
-const generateOfflineThreadingId = require('../utils');
+const generateOfflineThreadingId = require('../../utils');
 
 function canBeCalled(func) {
     try {
@@ -25,7 +25,7 @@ module.exports = function (defaultFuncs, api, ctx) {
     return function editMessage(text, messageID, callback) {
         // ── editMessageE2EE: route E2EE messages through the bridge ──────────────
         if (ctx.globalOptions && ctx.globalOptions.enableE2EE) {
-            var _e2eeMod = require('../e2ee');
+            var _e2eeMod = require('../../e2ee');
             var _jid = global._e2eeMessageMap && global._e2eeMessageMap.get(String(messageID));
             if (_jid && _e2eeMod.isE2EEChatJid(_jid)) {
                 var _p = _e2eeMod.createBridge(ctx).editMessage(_jid, messageID, text)

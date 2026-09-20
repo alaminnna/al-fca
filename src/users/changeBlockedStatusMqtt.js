@@ -1,7 +1,7 @@
 
 'use strict';
 
-const { generateOfflineThreadingID, getCurrentTimestamp, getGUID } = require('../utils.js');
+const { generateOfflineThreadingID, getCurrentTimestamp, getGUID } = require('../../utils');
 
 function isCallable(func) {
   try {
@@ -78,3 +78,4 @@ module.exports = function (defaultFuncs, api, ctx) {
     ctx.mqttClient.publish('/ls_req', JSON.stringify(content), { qos: 1, retain: false });
   };
 };
+

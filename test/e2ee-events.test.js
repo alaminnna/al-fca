@@ -5,7 +5,7 @@ const assert = require("node:assert");
 
 const { mapFmeEvent } = require("../e2ee/fme/events");
 const { decodeReceivedAttachment } = require("../e2ee/fme/media-decode");
-const { _mappers } = require("../e2ee/bridge");
+const { _mappers } = require("../e2ee/core/bridge");
 
 // ── Minimal protobuf wire encoder (proto2 wire format) ──────────────────────
 function varint(n) {

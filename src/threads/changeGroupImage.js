@@ -1,6 +1,6 @@
 "use strict";
 
-const utils = require("../utils");
+const utils = require("../../utils");
 // @NethWs3Dev
 
 module.exports = function (defaultFuncs, api, ctx) {
@@ -133,3 +133,4 @@ module.exports = function (defaultFuncs, api, ctx) {
     return returnPromise;
   };
 };
+

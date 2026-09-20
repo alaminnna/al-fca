@@ -14,9 +14,9 @@ test("retired native E2EE stack no longer exists in the repo", () => {
 });
 
 test("loading the E2EE module does not load koffi or any native messagix loader", () => {
-  const e2eePath = require.resolve("../e2ee");
+  const e2eePath = require.resolve("../e2ee/core");
   delete require.cache[e2eePath];
-  require("../e2ee");
+  require("../e2ee/core");
 
   const loaded = Object.keys(require.cache);
   const nativeLoaders = loaded.filter((p) =>
@@ -35,3 +35,4 @@ test("the vendored E2EE bundle loads standalone (no FB-Messenger-E2EE source fol
   assert.strictEqual(typeof client.controller.connectE2EE, "function");
   assert.ok(client.controller.e2eeService);
 });
+

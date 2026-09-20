@@ -1,6 +1,6 @@
 "use strict";
 
-const utils = require("../utils");
+const utils = require("../../utils");
 
 module.exports = function (defaultFuncs, api, ctx) {
   return function addExternalModule(moduleObj) {
@@ -23,3 +23,4 @@ module.exports = function (defaultFuncs, api, ctx) {
     }
   };
 };
+

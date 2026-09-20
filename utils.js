@@ -5,7 +5,7 @@
 
 "use strict";
 var url = require("url");
-var log = require("./src/logger");
+var log = require("./src/core/logger");
 var stream = require("stream");
 var bluebird = require("bluebird");
 var querystring = require("querystring");

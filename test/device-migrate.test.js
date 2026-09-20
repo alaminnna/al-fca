@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const { ensureCurrentDevice, defaultPaths } = require("../e2ee/device-migrate");
+const { ensureCurrentDevice, defaultPaths } = require("../e2ee/core/device-migrate");
 const { resolveDevicePath } = require("../e2ee/fme/fme-client");
 
 function sandbox() {

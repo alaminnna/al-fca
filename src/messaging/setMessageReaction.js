@@ -28,7 +28,7 @@ module.exports = function (defaultFuncs, api, ctx) {
 
     // ── sendReactionE2EE: route E2EE reactions through the bridge ─────────────
     if (ctx.globalOptions && ctx.globalOptions.enableE2EE) {
-      var _e2eeMod = require('../e2ee');
+      var _e2eeMod = require('../../e2ee');
       var _jid = global._e2eeMessageMap && global._e2eeMessageMap.get(String(messageID));
       if (_jid && _e2eeMod.isE2EEChatJid(_jid)) {
         var _senderJid = (global._e2eeSenderJidMap && global._e2eeSenderJidMap.get(String(messageID))) || null;

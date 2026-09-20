@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert");
 
-const e2ee = require("../e2ee");
+const e2ee = require("../e2ee/core");
 
 test("isE2EEChatJid detects legacy colon JIDs", () => {
   assert.strictEqual(e2ee.isE2EEChatJid("61568577897207:69@msgr"), true);
@@ -81,7 +81,7 @@ test("sendTypingE2EE no-ops for non-E2EE threads", async () => {
 });
 
 test("typed E2EE errors are exposed with stable names/codes", () => {
-  const { E2EEInitializationError, E2EEMediaError } = require("../e2ee/errors");
+  const { E2EEInitializationError, E2EEMediaError } = require("../e2ee/core/errors");
   const initErr = new E2EEInitializationError("no bundle");
   assert.strictEqual(initErr.name, "E2EEInitializationError");
   assert.strictEqual(initErr.code, "E2EE_INITIALIZATION");
@@ -99,8 +99,8 @@ test("bridge.sendTyping strips DM JIDs to numeric threads", async () => {
       return Promise.resolve("ok");
     }
   };
-  require("../e2ee").patchApiForE2EE(api, ctx);
-  const bridge = require("../e2ee").createBridge(ctx);
+  require("../e2ee/core").patchApiForE2EE(api, ctx);
+  const bridge = require("../e2ee/core").createBridge(ctx);
   const result = await bridge.sendTyping("61578789046935.0@msgr", true);
   assert.strictEqual(result, "ok");
   assert.deepStrictEqual(calls, [[true, "61578789046935"]]);
@@ -115,8 +115,8 @@ test("bridge.sendTyping passes group JIDs through untouched", async () => {
       return Promise.resolve("ok");
     }
   };
-  require("../e2ee").patchApiForE2EE(api, ctx);
-  const bridge = require("../e2ee").createBridge(ctx);
+  require("../e2ee/core").patchApiForE2EE(api, ctx);
+  const bridge = require("../e2ee/core").createBridge(ctx);
   await bridge.sendTyping("123456-789@g.us", false);
   assert.deepStrictEqual(calls, [[false, "123456-789@g.us"]]);
 });
@@ -129,10 +129,11 @@ test("markAsRead strips E2EE DM JIDs to numeric threads", async () => {
       cb(null);
     }
   };
-  const markAsRead = require("../src/markAsRead.js")({}, {}, { mqttClient: fakeMqtt, globalOptions: {} });
+  const markAsRead = require("../src/messaging/markAsRead.js")({}, {}, { mqttClient: fakeMqtt, globalOptions: {} });
   await markAsRead("61578789046935.0@msgr");
   assert.strictEqual(published.length, 1);
   assert.strictEqual(published[0][0], "/mark_thread");
   assert.strictEqual(published[0][1].threadID, "61578789046935");
   assert.strictEqual(published[0][1].mark, "read");
 });
+

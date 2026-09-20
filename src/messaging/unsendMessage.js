@@ -23,7 +23,7 @@ module.exports = function (defaultFuncs, api, ctx) {
 
     // ── unsendMessageE2EE: route E2EE unsend through the bridge ─────────────
     if (ctx.globalOptions && ctx.globalOptions.enableE2EE) {
-      var _e2eeMod = require('../e2ee');
+      var _e2eeMod = require('../../e2ee');
       var _jid = global._e2eeMessageMap && global._e2eeMessageMap.get(String(messageID));
       // Fallback: if messageID not in map but a pending JID was set externally, use it
       if (!_jid && global._e2eePendingUnsendJid) {

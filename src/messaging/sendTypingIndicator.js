@@ -9,7 +9,7 @@ module.exports = function (defaultFuncs, api, ctx) {
 		// normal Lightspeed thread channel. Typing state is thread metadata,
 		// not message content, and renders in the same E2EE conversation.
 		if (ctx.globalOptions && ctx.globalOptions.enableE2EE) {
-			var _e2eeMod = require('../e2ee');
+			var _e2eeMod = require('../../e2ee');
 			var _tid = String(threadID);
 			if (_e2eeMod.isE2EEChatJid(_tid) && /@msgr$/i.test(_tid)) {
 				var _m = _tid.match(/^(\d+)/);

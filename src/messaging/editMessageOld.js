@@ -1,6 +1,6 @@
 "use_strict";
 
-const { generateOfflineThreadingID } = require('../utils');
+const { generateOfflineThreadingID } = require('../../utils');
 
 function isCallable(func) {
   try {

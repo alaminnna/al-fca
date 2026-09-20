@@ -14,11 +14,11 @@ var path  = require("path");
 var fs    = require("fs");
 
 var { createApiShim } = require("./api-shim");
-var { CURRENT_DIRNAME, DEVICE_FILENAME, ensureCurrentDevice } = require("../device-migrate");
+var { CURRENT_DIRNAME, DEVICE_FILENAME, ensureCurrentDevice } = require("../core/device-migrate");
 var {
   E2EEInitializationError,
   E2EESessionError
-} = require("../errors");
+} = require("../core/errors");
 
 var _distPathCache = null;
 
@@ -97,13 +97,13 @@ async function createFmeSession(ctx, api) {
 
   var devicePath = resolveDevicePath(globalOptions);
   if (!globalOptions.e2eeDevicePath) {
-    devicePath = ensureCurrentDevice(devicePath, { log: require("../../src/logger") }).path;
+    devicePath = ensureCurrentDevice(devicePath, { log: require("../../src/core/logger") }).path;
   }
   // FME's DeviceStore.fromFile() writes immediately when creating a fresh
   // store but never creates parent directories — ensure them first.
   fs.mkdirSync(path.dirname(devicePath), { recursive: true });
   if (globalOptions.e2eeMemoryOnly !== false) {
-    var log = require("../../src/logger");
+    var log = require("../../src/core/logger");
     log.warn("e2ee", "e2eeMemoryOnly is not supported by the FB-Messenger-E2EE backend: " +
       "device keys persist at " + devicePath + " (mode 0600). " +
       "Set e2eeDevicePath to choose the location.");

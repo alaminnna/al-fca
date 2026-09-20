@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert");
 
-const log = require("../src/logger");
+const log = require("../src/core/logger");
 
 function captureStderr(fn) {
   const orig = process.stderr.write;

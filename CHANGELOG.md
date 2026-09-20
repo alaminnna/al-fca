@@ -45,7 +45,7 @@ All notable changes to AL-FCA will be documented in this file.
 - `ENOENT ... .al-fca-e2ee/device.json` on first E2EE connect (device directory is created automatically)
 - E2EE media upload `invalid content-length header` (manual Content-Length removed; undici sets it for Buffer bodies)
 - `api.getE2EEDeviceData` and `api.connectE2EE` now work without the native client
-- E2EE `setMessageReaction` error handler crash (`require('../utils').log` → `npmlog`)
+- E2EE `setMessageReaction` error handler crash (`require('../../utils'.log` → `npmlog`)
 
 ### Removed
 - `e2eeMemoryOnly` behavior: the new backend always persists the device file (a one-time warning is logged); old messagix device files are incompatible — re-register once

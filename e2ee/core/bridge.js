@@ -17,8 +17,8 @@
 
 var log = require("../../src/core/logger");
 
-var { mapFmeEvent } = require("./fme/events");
-var { createFmeSession } = require("./fme/fme-client");
+var { mapFmeEvent } = require("../fme/events");
+var { createFmeSession } = require("../fme/fme-client");
 var { storeMedia } = require("./media-server");
 var {
   E2EEDecryptionError,

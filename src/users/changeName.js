@@ -1,6 +1,6 @@
 "use strict";
 
-var utils = require('./../utils.js');
+var utils = require('../../utils.js');
 var log = require('npmlog');
 
 module.exports = function (defaultFuncs, api, ctx) {
