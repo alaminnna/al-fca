@@ -155,10 +155,12 @@ function buildAPI(globalOptions, html, jar) {
     var userCookie = cookies.find(cookie => cookie.cookieString().startsWith("c_user="));
     var tiktikCookie = cookies.find(cookie => cookie.cookieString().startsWith("i_user="));
     if (!userCookie && !tiktikCookie) {
-        return log.error("Error! Your cookiestate is not valid!");
+        log.error("Error! Your cookiestate is not valid!");
+        throw new Error("Your cookiestate is not valid! Use a fresh appstate and try again.");
     }
     if (html.includes("/checkpoint/block/?next")) {
-        return log.error('error', "Appstate is dead rechange it!", 'error');
+        log.error('error', "Appstate is dead rechange it!", 'error');
+        throw new Error("Appstate is dead, change it!");
     }
     userID = (tiktikCookie || userCookie).cookieString().split("=")[1];
     //logger.log(`${cra(`[ CONNECT ]`)} Logged in as ${userID}`, "DATABASE");
