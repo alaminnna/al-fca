@@ -1,6 +1,6 @@
 {
-  "name": "al-fca",
-  "version": "2.0.0",
+  "name": "@alaminnna/al-fca",
+  "version": "2.0.1",
   "description": "AL-FCA — Unofficial Facebook Chat API for Node.js with Auto-Update System and End-to-End Encryption (E2EE) support",
   "main": "index.js",
   "files": [
@@ -66,6 +66,7 @@
   "homepage": "https://github.com/alaminnna/al-fca#readme",
   "dependencies": {
     "@signalapp/libsignal-client": "0.70.0",
+    "al-fca": "^2.0.0",
     "axios": "^1.8.4",
     "bluebird": "^3.7.2",
     "chalk": "^4.1.2",
@@ -85,6 +86,5 @@
   },
   "directories": {
     "test": "test"
-  },
-  "devDependencies": {}
+  }
 }

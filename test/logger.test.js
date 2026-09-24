@@ -40,7 +40,7 @@ test("logger emits timestamped AL-FCA lines", () => {
   log.setLevel("verbose");
   try {
     const out = stripAnsi(captureStderr(() => log.info("myPrefix", "hello", 42)));
-    assert.match(out, /\[AL-FCA\] \[\d{2}:\d{2}:\d{2}\] \[INFO {3}\] \[myPrefix\] hello 42/);
+    assert.match(out, /\d{2}:\d{2}:\d{2} ℹ INFO +\[myPrefix\] hello 42/);
   } finally {
     log.setLevel(prev);
   }
@@ -57,11 +57,11 @@ test("new levels render with padded uppercase labels", () => {
       log.network("n", "net-msg");
       log.debug("d", "dbg-msg");
     }));
-    assert.match(out, /\[SUCCESS\] \[s\] ok-msg/);
-    assert.match(out, /\[EVENT {2}\] \[e\] evt-msg/);
-    assert.match(out, /\[E2EE {3}\] \[k\] e2ee-msg/);
-    assert.match(out, /\[NETWORK\] \[n\] net-msg/);
-    assert.match(out, /\[DEBUG {2}\] \[d\] dbg-msg/);
+    assert.match(out, /✔ OK +\[s\] ok-msg/);
+    assert.match(out, /● EVENT +\[e\] evt-msg/);
+    assert.match(out, /🔒 E2EE +\[k\] e2ee-msg/);
+    assert.match(out, /◉ NETWORK +\[n\] net-msg/);
+    assert.match(out, /· DEBUG +\[d\] dbg-msg/);
   } finally {
     log.setLevel(prev);
   }

@@ -143,10 +143,10 @@ function buildAPI(globalOptions, html, jar) {
                 }
             } catch { }
             if (fb_dtsg) {
-                console.log("Found fb_dtsg!");
+                log.debug("login", "Found fb_dtsg!");
             }
         } catch (e) {
-            console.log("Error finding fb_dtsg:", e);
+            log.error("login", "Error finding fb_dtsg: " + (e && e.message ? e.message : e));
         }
     }
     extractFromHTML();
@@ -172,7 +172,7 @@ function buildAPI(globalOptions, html, jar) {
     try {
         const endpointMatch = html.match(/"endpoint":"([^"]+)"/);
         if (endpointMatch && endpointMatch.input && endpointMatch.input.includes("601051028565049")) {
-          console.log(`login error.`);
+          log.error("login", "Login endpoint error.");
           ditconmemay = true;
         }
         if (endpointMatch) {
@@ -190,7 +190,7 @@ function buildAPI(globalOptions, html, jar) {
             }
         }
     } catch (e) {
-        console.log('Using default MQTT endpoint');
+        log.warn("mqtt", "Using default MQTT endpoint");
     }
     log.info('Logging in...');
     var ctx = {
@@ -241,7 +241,7 @@ function buildAPI(globalOptions, html, jar) {
             if (typeof global.GoatBot.config.typingDuration !== 'undefined') config.typingDuration = global.GoatBot.config.typingDuration;
         }
     } catch (e) {
-        console.log('Error loading config.json:', e);
+        log.error("config", "Error loading config.json: " + (e && e.message ? e.message : e));
     }
 
     const refreshFcaConfig = () => {
@@ -281,7 +281,7 @@ function buildAPI(globalOptions, html, jar) {
                 global.GoatBot.config.typingDuration = updatedConfig.typingDuration;
             }
         } catch (e) {
-            console.log('Failed to refresh fca config:', e);
+            log.error("config", "Failed to refresh fca config: " + (e && e.message ? e.message : e));
         }
     };
 

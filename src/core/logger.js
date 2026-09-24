@@ -209,17 +209,17 @@ function finishSpinner(sp, kind, msg) {
   if (idx >= 0) activeSpinners.splice(idx, 1);
   var text = (msg == null || msg === "") ? sp.text : String(msg);
   var el = gray("· " + elapsedStr(sp.start));
-  var stamp = gray("[" + timestamp() + "]");
+  var stamp = gray(timestamp());
   var out;
   if (kind === "succeed") {
     var ok = chalk ? chalk.green.bold("✔") : "✔";
-    out = stamp + " " + ok + "  " + whiteBright(text) + " " + el;
+    out = stamp + " " + ok + " " + colorLabel("success", "OK   ".padEnd(5)) + "  " + whiteBright(text) + " " + el;
   } else if (kind === "fail") {
     var bad = chalk ? chalk.red.bold("✖") : "✖";
-    out = stamp + " " + bad + "  " + (chalk ? chalk.red(text) : text) + " " + el;
+    out = stamp + " " + bad + " " + colorLabel("error", "ERROR") + "  " + (chalk ? chalk.red(text) : text) + " " + el;
   } else {
-    var wr = chalk ? chalk.yellow.bold("▲") : "▲";
-    out = stamp + " " + wr + "  " + (chalk ? chalk.yellow(text) : text) + " " + el;
+    var wr = chalk ? chalk.yellow.bold("⚠") : "⚠";
+    out = stamp + " " + wr + " " + colorLabel("warn", "WARN ".padEnd(5)) + "  " + (chalk ? chalk.yellow(text) : text) + " " + el;
   }
   printStderrLine(out);
   if (activeSpinners.length === 0) showCursor();
@@ -251,60 +251,84 @@ function makeSpinner(text) {
   return sp;
 }
 
-// ------------------------------------------------------- new-format lines
+// ------------------------------------------------------- clean-format lines
+// Target: `08:14:02 ✔ OK     Login successful`
+//         `08:14:05 ⚠ WARN   [setOptions] Unrecognized option ...`
 function iconFor(level) {
   switch (level) {
     case "info": return chalk ? chalk.hex("#4FC3F7")("ℹ") : "ℹ";
     case "success": return chalk ? chalk.green("✔") : "✔";
-    case "warn": return chalk ? chalk.yellow("▲") : "▲";
+    case "warn": return chalk ? chalk.yellow("⚠") : "⚠";
     case "error": return chalk ? chalk.red("✖") : "✖";
-    case "debug": return chalk ? chalk.magenta("»") : "»";
+    case "debug":
+    case "verbose":
+    case "silly": return chalk ? chalk.gray("·") : "·";
     case "e2ee": return "🔒";
+    case "http": return chalk ? chalk.hex("#4FC3F7")("ℹ") : "ℹ";
+    case "event": return chalk ? chalk.blue("●") : "●";
     case "net":
     case "network": return chalk ? chalk.hex("#FFA726")("◉") : "◉";
     default: return chalk ? chalk.cyan("ℹ") : "ℹ";
   }
 }
 
-function newStyleLine(level, msg) {
-  var stamp = gray("[" + timestamp() + "]");
-  var icon = iconFor(level);
-  var body;
-  if (level === "info") body = whiteBright(String(msg));
-  else if (level === "success") body = whiteBright(String(msg));
-  else if (level === "warn") body = chalk ? chalk.yellow(String(msg)) : String(msg);
-  else if (level === "error") body = chalk ? chalk.red(String(msg)) : String(msg);
-  else if (level === "debug") body = chalk ? chalk.dim(String(msg)) : String(msg);
-  else if (level === "e2ee") body = chalk ? chalk.cyan(String(msg)) : String(msg);
-  else body = String(msg);
-  return stamp + " " + icon + "  " + body;
+function labelFor(level) {
+  if (level === "success") return "OK";
+  if (level === "net") return "NET";
+  if (level === "verbose") return "VERB";
+  return String(level || "info").toUpperCase();
 }
 
-// Legacy line for old-style (prefix) calls — keeps tests + 96 call sites green.
-function legacyColorize(level, text) {
-  if (!chalk) return text;
+function colorBody(level, msg) {
+  var s = String(msg);
+  if (!chalk) return s;
+  if (level === "info" || level === "success") return chalk.white(s);
+  if (level === "warn") return chalk.yellow(s);
+  if (level === "error") return chalk.red(s);
+  if (level === "e2ee") return chalk.cyan(s);
+  if (level === "net" || level === "network" || level === "http") return chalk.magenta(s);
+  if (level === "event") return chalk.blue(s);
+  return chalk.dim(s);
+}
+
+function colorLabel(level, label) {
+  if (!chalk) return label;
   switch (level) {
-    case "error": return chalk.red(text);
-    case "warn": return chalk.yellow(text);
-    case "success": return chalk.green(text);
-    case "http":
-    case "network": return chalk.magenta(text);
-    case "info": return chalk.cyan(text);
-    case "event": return chalk.blue(text);
-    case "e2ee": return chalk.cyan(text);
-    case "verbose":
-    case "debug":
-    case "silly": return chalk.gray(text);
-    default: return text;
+    case "error": return chalk.red.bold(label);
+    case "warn": return chalk.yellow.bold(label);
+    case "success": return chalk.green.bold(label);
+    case "info":
+    case "http": return chalk.cyan.bold(label);
+    case "e2ee": return chalk.cyan.bold(label);
+    case "net":
+    case "network": return chalk.hex("#FFA726").bold(label);
+    case "event": return chalk.blue.bold(label);
+    default: return chalk.gray.bold(label);
   }
+}
+
+// Single shared line builder: `HH:MM:SS ICON LABEL  [prefix] message`
+function cleanLine(level, prefix, message) {
+  var stamp = gray(timestamp());
+  var icon = iconFor(level);
+  var label = colorLabel(level, labelFor(level).padEnd(5));
+  var pre = prefix ? gray("[" + prefix + "] ") : "";
+  var body = colorBody(level, message == null ? "" : message);
+  return stamp + " " + icon + " " + label + "  " + pre + body;
+}
+
+function newStyleLine(level, msg) {
+  return cleanLine(level, "", msg);
+}
+
+// Legacy entry point kept by name — now renders the same clean format.
+function legacyColorize(level, text) {
+  return colorLabel(level, text);
 }
 
 function legacyLine(level, prefix, args) {
   var message = util.format.apply(null, args);
-  var label = String(level || "info").toUpperCase();
-  while (label.length < 7) label += " ";
-  return "[AL-FCA] [" + timestamp() + "] [" + legacyColorize(level, label) + "]" +
-    (prefix ? " [" + prefix + "]" : "") + (message ? " " + message : "");
+  return cleanLine(level, prefix, message);
 }
 
 function emitLevel(level, argsArray) {
@@ -332,7 +356,7 @@ function makeLevelFn(level) {
 // ------------------------------------------------------- recv / sent
 function logRecv(user, body) {
   if (!allowed("info")) return;
-  var stamp = gray("[" + timestamp() + "]");
+  var stamp = gray(timestamp());
   var icon = chalk ? chalk.magenta("◄") : "◄";
   var u = chalk ? chalk.bold.magenta(String(user)) : String(user);
   var sep = gray(" » ");
@@ -342,7 +366,7 @@ function logRecv(user, body) {
 
 function logSent(user, body) {
   if (!allowed("info")) return;
-  var stamp = gray("[" + timestamp() + "]");
+  var stamp = gray(timestamp());
   var icon = chalk ? chalk.green("►") : "►";
   var u = chalk ? chalk.bold.green(String(user)) : String(user);
   var sep = gray(" « ");

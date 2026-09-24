@@ -78,6 +78,7 @@ function printMqttBanner(region, autoReconnect) {
     var valClr    = C.bYellow;
     var accentClr = C.bold + C.bMagenta;
     var urlClr    = C.bBlue;
+    var dimClr    = C.dim + C.bCyan;
     var rst       = C.reset;
 
     var regionVal = (region || '').toUpperCase();
@@ -85,14 +86,39 @@ function printMqttBanner(region, autoReconnect) {
     var reconnClr = autoReconnect ? C.bGreen : C.bRed;
     var reconnVal = reconnClr + reconnTxt + rst;
 
+    var inner = 44;
+    try {
+        var cols = process.stdout && process.stdout.columns;
+        if (cols && cols < inner + 6) inner = Math.max(30, cols - 6);
+    } catch (_) {}
+
+    function visLen(s) {
+        return String(s).replace(/\x1b\[[0-9;]*m/g, '').length;
+    }
+    function padVis(s, w) {
+        var n = w - visLen(s);
+        return s + (n > 0 ? new Array(n + 1).join(' ') : '');
+    }
+    function row(left, right) {
+        var l = '  ' + left;
+        var content = right == null ? l : l + right;
+        return dimClr + '│' + rst + padVis(content, inner) + dimClr + '│' + rst;
+    }
+
+    var top = dimClr + '╭' + new Array(inner + 1).join('─') + '╮' + rst;
+    var bot = dimClr + '╰' + new Array(inner + 1).join('─') + '╯' + rst;
+    var blank = row('');
+
     var rows = [
-        titleClr + '  ✅  AL-FCA MQTT Connected' + rst,
-        '',
-        labelClr + '  📍  Region         ' + rst + valClr + regionVal + rst,
-        labelClr + '  🔄  Auto-reconnect  ' + rst + reconnVal,
-        urlClr   + '  🌐  github.com/alaminnna/al-fca' + rst,
-        '',
-        accentClr + '  💎  Author  Alamin' + rst
+        top,
+        row(titleClr + '✅  AL-FCA MQTT Connected' + rst),
+        blank,
+        row(padVis('  ' + labelClr + '📍  Region' + rst, 24), valClr + regionVal + rst),
+        row(padVis('  ' + labelClr + '🔄  Auto-reconnect' + rst, 24), reconnVal),
+        row(urlClr + '🌐  github.com/alaminnna/al-fca' + rst),
+        blank,
+        row(accentClr + '💎  Author  Alamin' + rst),
+        bot
     ];
 
     process.stdout.write('\n');

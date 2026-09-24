@@ -6189,8 +6189,8 @@ var ClientController = class {
     const api = this.requireApi();
     const appState = api.getAppState?.() || [];
     const cookieStr = appState.map((c) => `${c.key}=${c.value}`).join("; ");
-    logger.info("ClientController", "FCA appState length:", appState.length);
-    logger.info("ClientController", "Cookie string snippet:", cookieStr.substring(0, 100));
+    logger.debug("ClientController", "FCA appState length:", appState.length);
+    logger.debug("ClientController", "Cookie string snippet:", cookieStr.substring(0, 100));
     await noiseSocket.connect(ds.noiseKeyPriv, clientPayload, cookieStr || void 0);
     this.e2eeSocket = noiseSocket;
     await new Promise((resolve, reject) => {

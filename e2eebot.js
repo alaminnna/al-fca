@@ -23,6 +23,7 @@
 const fs = require("fs");
 const path = require("path");
 const login = require("./index.js");
+var log = require("./src/core/logger");
 
 const PREFIX = "!";
 
@@ -34,14 +35,14 @@ function loadAppState() {
     if (fs.existsSync(appstatePath)) {
         const data = JSON.parse(fs.readFileSync(appstatePath, "utf8"));
         if (!Array.isArray(data)) throw new Error("appstate.json must be a JSON array of cookies");
-        console.log(`[COOKIES] ✓ Loaded ${data.length} cookies from appstate.json`);
+        log.success("cookies", "Loaded " + data.length + " cookies from appstate.json");
         return data;
     }
 
     if (fs.existsSync(cookiePath)) {
         const data = JSON.parse(fs.readFileSync(cookiePath, "utf8").trim());
         if (!Array.isArray(data) || data.length === 0) throw new Error("cookie.txt must be a JSON cookie array");
-        console.log(`[COOKIES] ✓ Loaded ${data.length} cookies from cookie.txt`);
+        log.success("cookies", "Loaded " + data.length + " cookies from cookie.txt");
         return data;
     }
 
@@ -102,11 +103,11 @@ function handleResendImage(event) {
         stream.path = "echo" + (att.mimeType === "image/png" ? ".png" : ".jpg");
         if (att.mimeType) stream.mimeType = att.mimeType;
         api.sendMessage({ body: "↩️ E2EE image echo", attachment: stream }, event.threadID, (sendErr) => {
-            if (sendErr) console.error("❌ [send]", sendErr && sendErr.message ? sendErr.message : sendErr);
-            else console.log("✓ [send] Echo image sent (encrypted)");
+            if (sendErr) log.error("send", sendErr && sendErr.message ? sendErr.message : sendErr);
+            else log.success("Echo image sent (encrypted)");
         });
     }).catch((e) => {
-        console.error("❌ [!s download]", e && e.message ? e.message : e);
+        log.error("resend", e && e.message ? e.message : e);
         api.sendMessage("❌ Image download failed: " + (e && e.message ? e.message : e), event.threadID);
     });
 }
@@ -158,28 +159,28 @@ try {
         },
         (err, _api) => {
             if (err) {
-                console.error("❌ [login]", err && err.message ? err.message : err);
+                log.error("login", err && err.message ? err.message : err);
                 process.exit(1);
             }
             api = _api;
 
-            console.log("✅ [login] Logged in as", api.getCurrentUserID());
+            log.success("Logged in as " + api.getCurrentUserID());
 
             api.listenMqtt((listenErr, event) => {
-                if (listenErr) return console.error("❌ [listen]", listenErr && listenErr.message ? listenErr.message : listenErr);
+                if (listenErr) return log.error("listen", listenErr && listenErr.message ? listenErr.message : listenErr);
                 if (!event || typeof event !== "object") return;
 
                 // E2EE lifecycle events (surfaced through the same listener)
                 if (event.type === "e2ee_connected") {
-                    console.log("🔐 [e2ee] Encrypted stream connected");
+                    log.e2ee("Encrypted stream connected");
                     return;
                 }
                 if (event.type === "e2ee_fully_ready") {
-                    console.log("🔐 [e2ee] Fully ready — device keys active");
+                    log.e2ee("Fully ready — device keys active");
                     return;
                 }
                 if (event.type === "e2ee_disconnected") {
-                    console.log("⚠️ [e2ee] Disconnected — auto-reconnecting");
+                    log.warn("e2ee", "Disconnected — auto-reconnecting");
                     return;
                 }
 
@@ -198,7 +199,7 @@ try {
                 }
                 cacheE2EEAttachments(event);
                 api.markAsRead(event.threadID, (readErr) => {
-                    if (readErr) console.error("❌ [auto-seen]", readErr && readErr.message ? readErr.message : readErr);
+                    if (readErr) log.error("auto-seen", readErr && readErr.message ? readErr.message : readErr);
                 });
 
                 const body = (event.body || "").trim();
@@ -225,8 +226,8 @@ try {
 
                 if (cmd === "seen") {
                     api.markAsRead(event.threadID, (seenErr) => {
-                        if (seenErr) console.error("❌ [seen]", seenErr && seenErr.message ? seenErr.message : seenErr);
-                        else console.log("✓ [seen] thread marked as read");
+                        if (seenErr) log.error("seen", seenErr && seenErr.message ? seenErr.message : seenErr);
+                        else log.success("Thread marked as read");
                     });
                     return;
                 }
@@ -236,19 +237,19 @@ try {
                     try {
                         const imgPath = path.join(__dirname, "assets", "e2eeconnect.png");
                         if (!fs.existsSync(imgPath)) {
-                            console.error("❌ [image] file not found:", imgPath);
+                            log.error("image", "file not found: " + imgPath);
                             return;
                         }
                         api.sendMessage(
                             { body: "🖼️ Encrypted image", attachment: fs.createReadStream(imgPath) },
                             event.threadID,
                             (imgErr) => {
-                                if (imgErr) console.error("❌ [send]", imgErr && imgErr.message ? imgErr.message : imgErr);
-                                else console.log("✓ [send] Encrypted image sent");
+                                if (imgErr) log.error("send", imgErr && imgErr.message ? imgErr.message : imgErr);
+                                else log.success("Encrypted image sent");
                             }
                         );
                     } catch (e) {
-                        console.error("❌ [image]", e && e.message ? e.message : e);
+                        log.error("image", e && e.message ? e.message : e);
                     }
                     return;
                 }
@@ -257,22 +258,22 @@ try {
                     const reply = buildReply(cmd, args, event);
                     if (!reply) return;
                     api.sendMessage(reply, event.threadID, (sendErr) => {
-                        if (sendErr) console.error("❌ [send]", sendErr && sendErr.message ? sendErr.message : sendErr);
-                        else console.log("✓ [send] Encrypted reply sent");
+                        if (sendErr) log.error("send", sendErr && sendErr.message ? sendErr.message : sendErr);
+                        else log.success("Encrypted reply sent");
                     });
                 } catch (e) {
-                    console.error("❌ [handler]", e && e.message ? e.message : e);
+                    log.error("handler", e && e.message ? e.message : e);
                 }
             });
 
             // Device key material persists at .al-fca-e2ee/device.json —
             // keep that file to stay the same registered E2EE device.
             api.getE2EEDeviceData((devErr) => {
-                if (devErr) console.error("❌ [e2ee-device]", devErr && devErr.message ? devErr.message : devErr);
+                if (devErr) log.error("e2ee-device", devErr && devErr.message ? devErr.message : devErr);
             });
         }
     );
 } catch (e) {
-    console.error("❌ [setup]", e && e.message ? e.message : e);
+    log.error("setup", e && e.message ? e.message : e);
     process.exit(1);
 }
