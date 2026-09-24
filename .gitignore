@@ -16,6 +16,11 @@ replit.nix
 generated-icon.png
 li.js
 
+# Local-only: example bots, tests — never push
+bot.js
+e2eebot.js
+test/
+
 # Vendored build artifacts (runtime JS stays, maps + TS sources go)
 e2ee/vendor/**/*.map
 e2ee/vendor/**/*.ts
