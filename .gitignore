@@ -24,3 +24,4 @@ e2ee/vendor/**/*.ts
 .omo/
 .codegraph/
 .kilo/
+.github/
