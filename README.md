@@ -51,6 +51,7 @@
 ## 🌟 What's New in AL-FCA
 
 - ✨ Enhanced MQTT connection logging
+- 📋 Clean log format (`HH:MM:SS ICON LEVEL [prefix] message`, e.g. `08:14:02 ✔ OK     Login successful`) with `AL_FCA_LOG_LEVEL` control
 - 🔄 Auto-reconnect with configurable intervals
 - 📊 Better connection status indicators
 - 🎨 Improved console output with colors
@@ -418,11 +419,11 @@ Or in login options:
 
 ### Test E2EE Bot
 
-A complete E2EE test bot is included: [e2eebot.js](./e2eebot.js)
+An E2EE test bot ships with the published package (not in this git repo — it's local-only):
 
 ```bash
-# Run the E2EE test bot
-node e2eebot.js
+# Inside the installed package
+node node_modules/al-fca/e2eebot.js
 ```
 
 Commands:
@@ -570,6 +571,30 @@ api.setOptions({
 
 - `listenEvents` is `false` - won't receive events like joining/leaving chat, title changes
 - `selfListen` is `false` - will ignore messages sent by the current account
+
+## 📋 Logging
+
+All boot, update, MQTT and E2EE status lines go through one styled logger:
+
+```
+08:14:02 ✔ OK     AL-FCA is up to date (v2.0.0)
+08:14:03 ℹ INFO   Logging in...
+08:14:05 ⚠ WARN   [setOptions] Unrecognized option given to setOptions: foo
+08:14:06 ✖ ERROR  MQTT send failed, falling back to HTTP
+08:14:09 · DEBUG  [parseAndCheckLogin] {"req":1}
+```
+
+Control the level with the `AL_FCA_LOG_LEVEL` env var or at runtime:
+
+```javascript
+api.setOptions({
+    logLevel: "silent"   // silent/error/warn/success/info/verbose/debug/silly (default: info)
+});
+```
+
+```bash
+AL_FCA_LOG_LEVEL=debug node index.js
+```
 
 ## 🛠️ Projects Using This API
 
