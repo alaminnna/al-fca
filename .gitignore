@@ -1,5 +1,4 @@
 node_modules/
-.stfca-e2ee/
 .al-fca-e2ee/
 
 # Secrets and local credentials — never commit
