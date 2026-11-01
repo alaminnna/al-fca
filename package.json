@@ -1,7 +1,7 @@
 {
   "name": "@alaminnna/al-fca",
   "version": "2.0.1",
-  "description": "AL-FCA — Unofficial Facebook Chat API for Node.js with Auto-Update System and End-to-End Encryption (E2EE) support",
+  "description": "AL-FCA — Unofficial Facebook Chat API for Node.js with optional update notifications and End-to-End Encryption (E2EE) support",
   "main": "index.js",
   "files": [
     "src/",
@@ -9,7 +9,6 @@
     "index.js",
     "utils.js",
     "checkUpdate.js",
-    "e2eebot.js",
     "docs/E2EE_GUIDE.md",
     "!e2ee/**/*.map",
     "!e2ee/**/*.ts",
