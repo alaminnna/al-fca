@@ -2,7 +2,7 @@
 
 var utils = require("../../utils");
 var log = require("npmlog");
-var bluebird = require("bluebird");
+var log = require("../core/logger");
 
 var allowedProperties = {
   attachment: true,
@@ -41,8 +41,7 @@ module.exports = function (defaultFuncs, api, ctx) {
     }
 
     // resolve all promises
-    bluebird
-      .all(uploads)
+    Promise.all(uploads)
       .then(resData => callback(null, resData))
       .catch(function (err) {
         log.error("uploadAttachment", err);
@@ -199,7 +198,7 @@ module.exports = function (defaultFuncs, api, ctx) {
 
       if (utils.getType(msg.attachment) !== "Array") msg.attachment = [msg.attachment];
       if (msg.attachment.every(e=>/_id$/.test(e[0]))) {
-        //console.log(msg.attachment)
+        //log.info(msg.attachment)
         msg.attachment.map(e=>form[`${e[0]}s`].push(e[1]));
         return cb();
         }
@@ -276,7 +275,7 @@ module.exports = function (defaultFuncs, api, ctx) {
     if (disallowedProperties.length > 0) return callback({ error: "Dissallowed props: `" + disallowedProperties.join(", ") + "`" });
 
     var messageAndOTID = utils.generateOfflineThreadingID();
-    // console.log(messageAndOTID)
+    // log.info(messageAndOTID)
     var form = {
       client: "mercury",
       action_type: "ma-type:user-generated-message",
@@ -309,7 +308,7 @@ module.exports = function (defaultFuncs, api, ctx) {
       signatureID: utils.getSignatureID(),
       replied_to_message_id: replyToMessage
     };
-    // console.log(form)
+    // log.info(form)
 
     const configSource = (global.GoatBot && global.GoatBot.config) ? global.GoatBot.config : ctx.config || {};
     const enableTypingIndicator = typeof configSource.enableTypingIndicator !== 'undefined' ? configSource.enableTypingIndicator : ctx.config?.enableTypingIndicator;

@@ -82,7 +82,11 @@ function publishLsRequestWithAck(mqttClient, content, requestId, timeout) {
     return new Promise(function (resolve, reject) {
         var timer = setTimeout(function () {
             mqttClient.removeListener('message', onMessage);
-            reject(new Error('MQTT sendMessage timed out'));
+            var err = new Error('MQTT sendMessage ack timeout after ' + timeout + 'ms');
+            err.code = 'MQTT_ACK_TIMEOUT';
+            // The message may still have been delivered — callers must NOT
+            // blindly retry via the HTTP path (duplicate message risk).
+            reject(err);
         }, timeout);
 
         function onMessage(topic, message) {
@@ -123,8 +127,8 @@ module.exports = function (defaultFuncs, api, ctx) {
     }
 
     async function sendViaMqtt(msg, threadID, replyToMessage) {
-        var mqttClient = ctx.mqttClient || global.mqttClient;
-        if (!mqttClient) throw new Error('MQTT client not available');
+        var mqttClient = ctx.mqttClient;
+        if (!mqttClient) throw new Error('MQTT client not available — call api.listenMqtt() before sending');
 
         var baseBody = msg.body != null ? String(msg.body) : "";
         var requestId = Math.floor(100 + Math.random() * 900);
@@ -321,10 +325,7 @@ module.exports = function (defaultFuncs, api, ctx) {
                         var _mRes = await _bridge.sendMedia(threadID, _mt, _buf, _mOpts);
                         _last = { threadID: threadID, messageID: _mRes && _mRes.messageId ? String(_mRes.messageId) : undefined, isE2EE: true };
                         if (_last.messageID) {
-                            global._e2eeMessageMap = global._e2eeMessageMap || new Map();
                             global._e2eeMessageMap.set(_last.messageID, String(threadID));
-                            global._e2eeBotSentMsgIds = global._e2eeBotSentMsgIds || new Set();
-                            global._e2eeBotSentMsgIds.add(_last.messageID);
                         }
                     } catch (_me) { log.error("E2EE", "sendMedia att#" + _i + " failed:", _me && _me.message ? _me.message : _me); }
                 }
@@ -333,10 +334,7 @@ module.exports = function (defaultFuncs, api, ctx) {
                     var _tRes = await _bridge.sendMessage(threadID, _text || "\u200b", _sendOpts);
                     _last = { threadID: threadID, messageID: _tRes && _tRes.messageId ? String(_tRes.messageId) : undefined, isE2EE: true };
                     if (_last.messageID) {
-                        global._e2eeMessageMap = global._e2eeMessageMap || new Map();
                         global._e2eeMessageMap.set(_last.messageID, String(threadID));
-                        global._e2eeBotSentMsgIds = global._e2eeBotSentMsgIds || new Set();
-                        global._e2eeBotSentMsgIds.add(_last.messageID);
                     }
                 }
                 return _last;
@@ -387,6 +385,11 @@ module.exports = function (defaultFuncs, api, ctx) {
             if (typeof callback === "function") callback(null, result);
             return result;
         } catch (mqttErr) {
+            // Ack timeout: the message was probably delivered — a fallback
+            // send here would duplicate it. Surface the error instead.
+            if (mqttErr && mqttErr.code === 'MQTT_ACK_TIMEOUT') {
+                throw mqttErr;
+            }
             log.warn("sendMessage", "MQTT send failed, falling back to HTTP: " + (mqttErr && mqttErr.message));
             if (enableTypingIndicator) {
                 api.sendTypingIndicator(false, threadID, function () { }).catch(function () { });

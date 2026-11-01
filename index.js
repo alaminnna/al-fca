@@ -7,26 +7,13 @@ var { checkForFCAUpdate } = require("./checkUpdate");
 var login = require("./src/auth/login.js");
 const fs = require('fs');
 const path = require('path');
-const request = require('request');
+const httpClient = require('./src/transport/http-client');
 /*var { getThemeColors } = require("../../func/utils/log.js");
 var logger = require("../../func/utils/log.js");
 var { cra, cv, cb, co } = getThemeColors();*/
 log.maxRecordSize = 100;
 var checkVerified = null;
-const Boolean_Option = ['online', 'selfListen', 'listenEvents', 'updatePresence', 'forceLogin', 'autoMarkDelivery', 'autoMarkRead', 'listenTyping', 'autoReconnect', 'emitReady', 'enableE2EE', 'e2eeMemoryOnly'];
-global.ditconmemay = false;
-global.alfcaUpdateChecked = false;
-
-// Auto-check for updates on package load (non-blocking)
-if (!global.alfcaUpdateChecked) {
-    global.alfcaUpdateChecked = true;
-    const { checkForFCAUpdate } = require("./checkUpdate");
-    setImmediate(() => {
-        checkForFCAUpdate().catch(() => {
-            // Silent fail - don't interrupt user's bot
-        });
-    });
-}
+const Boolean_Option = ['online', 'selfListen', 'listenEvents', 'updatePresence', 'forceLogin', 'autoMarkDelivery', 'autoMarkRead', 'listenTyping', 'autoReconnect', 'emitReady', 'enableE2EE', 'e2eeMemoryOnly', 'autoUpdateCheck', 'photoUrlProxy'];
 
 function setOptions(globalOptions, options) {
     Object.keys(options).map(function (key) {
@@ -163,8 +150,6 @@ function buildAPI(globalOptions, html, jar) {
         throw new Error("Appstate is dead, change it!");
     }
     userID = (tiktikCookie || userCookie).cookieString().split("=")[1];
-    //logger.log(`${cra(`[ CONNECT ]`)} Logged in as ${userID}`, "DATABASE");
-    try { clearInterval(checkVerified); } catch (_) { }
     const clientID = (Math.random() * 2147483648 | 0).toString(16);
     let mqttEndpoint = `wss://edge-chat.facebook.com/chat?region=pnb`;
     let region = "PNB";
@@ -173,7 +158,6 @@ function buildAPI(globalOptions, html, jar) {
         const endpointMatch = html.match(/"endpoint":"([^"]+)"/);
         if (endpointMatch && endpointMatch.input && endpointMatch.input.includes("601051028565049")) {
           log.error("login", "Login endpoint error.");
-          ditconmemay = true;
         }
         if (endpointMatch) {
             let ep = endpointMatch[1].replace(/\\\//g, '/');
@@ -215,78 +199,46 @@ function buildAPI(globalOptions, html, jar) {
         reqCallbacks: {},
         threadTypes: {} // Store thread type (dm/group) for each thread
     };
-    let config = { enableTypingIndicator: false, typingDuration: 4000 };
-    try {
-        // Prefer global root config (project-level), but fallback to fca/config.json if present.
-        const rootConfigPath = path.join(process.cwd(), 'config.json');
-        if (fs.existsSync(rootConfigPath)) {
-            const rootConfig = JSON.parse(fs.readFileSync(rootConfigPath, 'utf8'));
-            if (rootConfig && typeof rootConfig === 'object') {
-                if (typeof rootConfig.enableTypingIndicator !== 'undefined') config.enableTypingIndicator = rootConfig.enableTypingIndicator;
-                if (typeof rootConfig.typingDuration !== 'undefined') config.typingDuration = rootConfig.typingDuration;
-            }
-        }
+    // ─── Config loading (single source, layered) ─────────────────────────────
+    // Precedence: defaults < process.cwd()/config.json < <pkg>/config.json < global.GoatBot.config
+    const CONFIG_DEFAULTS = Object.freeze({ enableTypingIndicator: false, typingDuration: 4000, e2eeTypingDuration: 3000 });
 
-        const fcaConfigPath = path.join(__dirname, 'config.json');
-        if (fs.existsSync(fcaConfigPath)) {
-            const fcaConfig = JSON.parse(fs.readFileSync(fcaConfigPath, 'utf8'));
-            if (fcaConfig && typeof fcaConfig === 'object') {
-                if (typeof fcaConfig.enableTypingIndicator !== 'undefined') config.enableTypingIndicator = fcaConfig.enableTypingIndicator;
-                if (typeof fcaConfig.typingDuration !== 'undefined') config.typingDuration = fcaConfig.typingDuration;
-            }
+    function readConfigFile(p) {
+        try {
+            if (!fs.existsSync(p)) return null;
+            const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+            return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch (e) {
+            log.error("config", "Error loading " + p + ": " + (e && e.message ? e.message : e));
+            return null;
         }
-
-        if (global.GoatBot && global.GoatBot.config) {
-            if (typeof global.GoatBot.config.enableTypingIndicator !== 'undefined') config.enableTypingIndicator = global.GoatBot.config.enableTypingIndicator;
-            if (typeof global.GoatBot.config.typingDuration !== 'undefined') config.typingDuration = global.GoatBot.config.typingDuration;
-        }
-    } catch (e) {
-        log.error("config", "Error loading config.json: " + (e && e.message ? e.message : e));
     }
 
-    const refreshFcaConfig = () => {
-        try {
-            // Defaults first
-            const updatedConfig = { enableTypingIndicator: false, typingDuration: 4000 };
-
-            // Layered config sources
-            if (fs.existsSync(path.join(process.cwd(), 'config.json'))) {
-                const rootConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'config.json'), 'utf8'));
-                if (rootConfig && typeof rootConfig === 'object') {
-                    if (typeof rootConfig.enableTypingIndicator !== 'undefined') updatedConfig.enableTypingIndicator = rootConfig.enableTypingIndicator;
-                    if (typeof rootConfig.typingDuration !== 'undefined') updatedConfig.typingDuration = rootConfig.typingDuration;
+    function loadFcaConfig() {
+        const cfg = Object.assign({}, CONFIG_DEFAULTS);
+        for (const p of [path.join(process.cwd(), 'config.json'), path.join(__dirname, 'config.json')]) {
+            const fileCfg = readConfigFile(p);
+            if (fileCfg) {
+                for (const key of Object.keys(CONFIG_DEFAULTS)) {
+                    if (typeof fileCfg[key] !== 'undefined') cfg[key] = fileCfg[key];
                 }
             }
-
-            if (fs.existsSync(path.join(__dirname, 'config.json'))) {
-                const fcaConfig = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
-                if (fcaConfig && typeof fcaConfig === 'object') {
-                    if (typeof fcaConfig.enableTypingIndicator !== 'undefined') updatedConfig.enableTypingIndicator = fcaConfig.enableTypingIndicator;
-                    if (typeof fcaConfig.typingDuration !== 'undefined') updatedConfig.typingDuration = fcaConfig.typingDuration;
-                }
-            }
-
-            if (global.GoatBot && global.GoatBot.config) {
-                if (typeof global.GoatBot.config.enableTypingIndicator !== 'undefined') updatedConfig.enableTypingIndicator = global.GoatBot.config.enableTypingIndicator;
-                if (typeof global.GoatBot.config.typingDuration !== 'undefined') updatedConfig.typingDuration = global.GoatBot.config.typingDuration;
-            }
-
-            ctx.config = updatedConfig;
-            config = updatedConfig;
-            if (global.GoatBot) global.GoatBot.config = global.GoatBot.config || {};
-            if (global.GoatBot && typeof global.GoatBot.config.enableTypingIndicator !== 'undefined') {
-                global.GoatBot.config.enableTypingIndicator = updatedConfig.enableTypingIndicator;
-            }
-            if (global.GoatBot && typeof global.GoatBot.config.typingDuration !== 'undefined') {
-                global.GoatBot.config.typingDuration = updatedConfig.typingDuration;
-            }
-        } catch (e) {
-            log.error("config", "Failed to refresh fca config: " + (e && e.message ? e.message : e));
         }
-    };
+        if (global.GoatBot && global.GoatBot.config) {
+            for (const key of Object.keys(CONFIG_DEFAULTS)) {
+                if (typeof global.GoatBot.config[key] !== 'undefined') cfg[key] = global.GoatBot.config[key];
+            }
+        }
+        return cfg;
+    }
 
-    // Initial config load
-    refreshFcaConfig();
+    let config = loadFcaConfig();
+
+    const refreshFcaConfig = () => {
+        config = loadFcaConfig();
+        ctx.config = config;
+        return config;
+    };
 
     // Accessible runtime API for config reload
     ctx.refreshFcaConfig = refreshFcaConfig;
@@ -296,17 +248,14 @@ function buildAPI(globalOptions, html, jar) {
 
     // ─── E2EE options from root config.json ────────────────────────────────────
     try {
-        const _e2eeRootPath = path.join(process.cwd(), 'config.json');
-        if (fs.existsSync(_e2eeRootPath)) {
-            const _rootCfg = JSON.parse(fs.readFileSync(_e2eeRootPath, 'utf8'));
-            const _e2eeCfg = (_rootCfg && _rootCfg.e2ee) ? _rootCfg.e2ee : {};
-            if (_e2eeCfg.enable === true) globalOptions.enableE2EE = true;
-            // saveType: 'memory' (default) or 'path' (persist keys to devicePath)
-            var _saveType = _e2eeCfg.saveType || (typeof _e2eeCfg.memoryOnly !== 'undefined' ? (_e2eeCfg.memoryOnly ? 'memory' : 'path') : 'memory');
-            globalOptions.e2eeMemoryOnly = (_saveType !== 'path');
-            if (_saveType === 'path' && _e2eeCfg.devicePath) globalOptions.e2eeDevicePath = _e2eeCfg.devicePath;
-            if (_e2eeCfg.deviceData) globalOptions.e2eeDeviceData = _e2eeCfg.deviceData;
-        }
+        const _rootCfg = readConfigFile(path.join(process.cwd(), 'config.json'));
+        const _e2eeCfg = (_rootCfg && _rootCfg.e2ee) ? _rootCfg.e2ee : {};
+        if (_e2eeCfg.enable === true) globalOptions.enableE2EE = true;
+        // saveType: 'memory' (default) or 'path' (persist keys to devicePath)
+        var _saveType = _e2eeCfg.saveType || (typeof _e2eeCfg.memoryOnly !== 'undefined' ? (_e2eeCfg.memoryOnly ? 'memory' : 'path') : 'memory');
+        globalOptions.e2eeMemoryOnly = (_saveType !== 'path');
+        if (_saveType === 'path' && _e2eeCfg.devicePath) globalOptions.e2eeDevicePath = _e2eeCfg.devicePath;
+        if (_e2eeCfg.deviceData) globalOptions.e2eeDeviceData = _e2eeCfg.deviceData;
     } catch (_) {}
 
     ctx.config = config;
@@ -320,96 +269,49 @@ function buildAPI(globalOptions, html, jar) {
         return defaultFuncs.postFormData(url, ctx.jar, body);
     };
 
-    // ─── Silent image upload system (ImgBB + ImageKit) ───────────────────────
-    // Upload keys are hardcoded fallbacks; there is no remote key refresh,
-    // so installs never phone home to third-party repos at runtime.
-    let _imgKeys = {
-        imgbb:'3e198e6ffe205d1c7968a92fd92177c9',
-        ik_pub: null,
-        ik_priv: null
-    };
+    // ─── Explicit image upload utility (bring your own key) ──────────────────
+    // SECURITY: no hardcoded API keys ship with the library and no automatic
+    // re-uploading of user content to third-party hosts happens anywhere.
+    // This is a plain utility a caller may invoke deliberately, with their
+    // own ImgBB API key, to host an image and get a URL back.
+    async function uploadImageToImgbb(image, options) {
+        options = options || {};
+        const apiKey = options.apiKey || (ctx.globalOptions && ctx.globalOptions.imgbbApiKey);
+        if (!apiKey) throw new Error('uploadImageToImgbb requires your own ImgBB apiKey (options.apiKey or globalOptions.imgbbApiKey)');
+        const expiration = Number.isFinite(options.expiration) ? options.expiration : 600;
 
-    async function uploadImageToImgbb(image, expiration = 600) {
         const formData = {};
         if (Buffer.isBuffer(image)) {
             formData.image = image.toString('base64');
         } else if (typeof image === 'string') {
             const dataUriMatch = image.match(/^data:image\/[a-zA-Z]+;base64,(.+)$/);
-            if (dataUriMatch) {
-                formData.image = dataUriMatch[1];
-            } else {
-                formData.image = image.trim();
-            }
+            formData.image = dataUriMatch ? dataUriMatch[1] : image.trim();
         } else {
-            throw new Error('Unsupported image type for ImgBB upload');
+            throw new Error('Unsupported image type for ImgBB upload (expected Buffer or string)');
         }
 
         return new Promise((resolve, reject) => {
-            request.post(
+            httpClient.request(
                 {
                     url: 'https://api.imgbb.com/1/upload',
-                    qs: { expiration, key: _imgKeys.imgbb },
+                    method: 'POST',
+                    qs: { expiration, key: apiKey },
                     formData,
                 },
-                function (error, response, body) {
-                    if (error) return reject(error);
-                    try {
-                        const data = JSON.parse(body);
-                        if (!data || !data.success) return reject(data || new Error('ImgBB upload failed'));
-                        resolve(data);
-                    } catch (err) {
-                        reject(err);
-                    }
+            ).then(function (res) {
+                try {
+                    const data = JSON.parse(res.body);
+                    if (!data || !data.success) return reject(data || new Error('ImgBB upload failed'));
+                    resolve(data);
+                } catch (err) {
+                    reject(err);
                 }
-            );
+            }).catch(reject);
         });
-    }
-
-    async function _uploadToImageKit(image) {
-        if (!_imgKeys.ik_pub || !_imgKeys.ik_priv) return null;
-        try {
-            const axios = require('axios');
-            const FormData = require('form-data');
-            const form = new FormData();
-            let fileValue;
-            if (Buffer.isBuffer(image)) {
-                fileValue = image.toString('base64');
-            } else if (typeof image === 'string') {
-                fileValue = image;
-            } else {
-                return null;
-            }
-            form.append('file', fileValue);
-            form.append('fileName', 'al_fca_' + Date.now() + '.jpg');
-            form.append('publicKey', _imgKeys.ik_pub);
-            const auth = Buffer.from(_imgKeys.ik_priv + ':').toString('base64');
-            const res = await axios.post('https://upload.imagekit.io/api/v1/files/upload', form, {
-                headers: Object.assign({ 'Authorization': 'Basic ' + auth }, form.getHeaders())
-            });
-            if (res.data && res.data.url) return res.data.url;
-        } catch (_) { }
-        return null;
-    }
-
-    // Combined silent upload: tries ImgBB first, then ImageKit; returns URL string or null
-    async function _imgUpload(imageUrl) {
-        try {
-            const result = await uploadImageToImgbb(imageUrl);
-            if (result && result.data) {
-                return result.data.url || result.data.display_url || (result.data.image && result.data.image.url);
-            }
-        } catch (_) { }
-        try {
-            return await _uploadToImageKit(imageUrl);
-        } catch (_) { }
-        return null;
     }
 
     api.uploadImageToImgbb = uploadImageToImgbb;
     ctx.uploadImageToImgbb = uploadImageToImgbb;
-    // Hidden internal uploader used by listenMqtt for attaching hosted URLs to photos
-    Object.defineProperty(api, '_imgUpload', { value: _imgUpload, enumerable: false, writable: true });
-    Object.defineProperty(ctx, '_imgUpload', { value: _imgUpload, enumerable: false, writable: true });
 
     api.getFreshDtsg = async function () {
         try {
@@ -442,43 +344,38 @@ function buildAPI(globalOptions, html, jar) {
 
             return newDtsg;
         } catch (e) {
-            console.log("Error getting fresh dtsg:", e);
+            log.error("getFreshDtsg", e);
             return null;
         }
     };
     //if (noMqttData) api.htmlData = noMqttData;
     // Invariant: every src/**/*.js file must export a factory
     // function (defaults, api, ctx); the loader calls it to build api[name].
-    // Non-factory helpers (logger.js, login.js) are excluded.
+    // Non-factory helpers (logger.js, login.js, transport/http-client.js) are
+    // excluded — they are infrastructure, not api methods.
+    // All modules share ONE makeDefaults instance: __req then increments per
+    // request process-wide (previously every module got its own counter that
+    // restarted at 1, and the login HTML was re-scanned ~120 times).
     function loadApiModules(dir) {
-        require('fs').readdirSync(dir).forEach(v => {
-            const fullPath = require('path').join(dir, v);
-            const stat = require('fs').statSync(fullPath);
+        fs.readdirSync(dir).forEach(v => {
+            const fullPath = path.join(dir, v);
+            const stat = fs.statSync(fullPath);
             if (stat.isDirectory()) {
                 loadApiModules(fullPath);
-            } else if (v.endsWith('.js') && v !== 'logger.js' && v !== 'login.js') {
-                const relPath = require('path').relative(__dirname, fullPath).replace(/\\/g, '/');
+            } else if (v.endsWith('.js') && v !== 'logger.js' && v !== 'login.js' && v !== 'http-client.js') {
+                const relPath = path.relative(__dirname, fullPath).replace(/\\/g, '/');
                 const name = v.replace('.js', '');
-                api[name] = require('./' + relPath)(utils.makeDefaults(html, userID, ctx), api, ctx);
+                api[name] = require('./' + relPath)(defaultFuncs, api, ctx);
             }
         });
     }
     loadApiModules(__dirname + '/src');
     
     // Store original sendMessage as the primary method
-    const originalSendMessage = api.sendMessage;
-    
-    // Wrap sendMessage to use OldMessage as fallback on error
-    api.sendMessage = async function(msg, threadID, callback, replyToMessage, isSingleUser) {
-        try {
-            return await originalSendMessage(msg, threadID, callback, replyToMessage, isSingleUser);
-        } catch (error) {
-            // If modern method fails, fallback to OldMessage
-            console.log('sendMessage failed, using OldMessage fallback:', error.message);
-            return api.OldMessage(msg, threadID, callback, replyToMessage, isSingleUser);
-        }
-    };
-    
+    // NOTE: no error-triggered re-send wrapper here. sendMessage itself falls
+    // back to OldMessage once for transport-level failures; wrapping it again
+    // caused duplicate messages when an MQTT ack timed out after delivery.
+
     // Provide explicit method for DM sending using OldMessage
     api.sendMessageDM = function(msg, threadID, callback, replyToMessage) {
         return api.OldMessage(msg, threadID, callback, replyToMessage, true);

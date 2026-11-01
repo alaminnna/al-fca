@@ -1,8 +1,10 @@
 var utils = require("../../utils");
 // @NethWs3Dev
-var bluebird = require("bluebird");
+var log = require("../core/logger");
 
 module.exports = function (defaultFuncs, api, ctx) {
+  let requestIdCounter = 0;
+
   function uploadAttachment(attachments, callback) {
     callback = callback || function () {};
     var uploads = [];
@@ -10,12 +12,14 @@ module.exports = function (defaultFuncs, api, ctx) {
     // create an array of promises
     for (var i = 0; i < attachments.length; i++) {
       if (!utils.isReadableStream(attachments[i])) {
-        throw {
+        // Reject through the callback chain instead of throwing synchronously
+        // (a synchronous throw here crashed the process).
+        return process.nextTick(callback, {
           error:
             "Attachment should be a readable stream and not " +
             utils.getType(attachments[i]) +
             ".",
-        };
+        });
       }
 
       var form = {
@@ -45,20 +49,20 @@ module.exports = function (defaultFuncs, api, ctx) {
     }
 
     // resolve all promises
-    bluebird
-      .all(uploads)
+    Promise.all(uploads)
       .then(function (resData) {
         callback(null, resData);
       })
       .catch(function (err) {
-        console.error("uploadAttachment", err);
+        log.error("uploadAttachment", err);
         return callback(err);
       });
   }
 
-  let variance = 0;
-  const epoch_id = () =>
-    Math.floor(Date.now() * (4194304 + (variance = (variance + 0.1) % 5)));
+  const epoch_id = () => {
+    // 64-bit-safe: Date.now() << 22 overflows 32-bit integers.
+    return (BigInt(Date.now()) << 22n).toString();
+  };
   const emojiSizes = {
     small: 1,
     medium: 2,
@@ -130,13 +134,26 @@ module.exports = function (defaultFuncs, api, ctx) {
     if (msg.mentions) {
       form.payload.tasks[0].payload.send_type = 1;
 
+      // Accept both the classic object form ({ id: "tag" }) and the array
+      // form ({ id, tag, fromIndex }) used by sendMessage.
+      let entries;
+      if (utils.getType(msg.mentions) === "Array") {
+        entries = msg.mentions.map(function (m) {
+          return { id: m.id, tag: m.tag, fromIndex: m.fromIndex || 0 };
+        });
+      } else {
+        entries = Object.keys(msg.mentions).map(function (id) {
+          return { id: id, tag: msg.mentions[id], fromIndex: 0 };
+        });
+      }
+
       const arrayIds = [];
       const arrayOffsets = [];
       const arrayLengths = [];
       const mention_types = [];
 
-      for (let i = 0; i < msg.mentions.length; i++) {
-        const mention = msg.mentions[i];
+      for (let i = 0; i < entries.length; i++) {
+        const mention = entries[i];
 
         const tag = mention.tag;
         if (typeof tag !== "string") {
@@ -146,19 +163,19 @@ module.exports = function (defaultFuncs, api, ctx) {
         const offset = msg.body.indexOf(tag, mention.fromIndex || 0);
 
         if (offset < 0) {
-          console.warn(
+          log.warn(
             "handleMention",
             'Mention for "' + tag + '" not found in message string.',
           );
         }
 
         if (mention.id == null) {
-          console.warn("handleMention", "Mention id should be non-null.");
+          log.warn("handleMention", "Mention id should be non-null.");
         }
 
         const id = mention.id || 0;
         arrayIds.push(id);
-        arrayOffsets.push(offset);
+        arrayOffsets.push(offset < 0 ? 0 : offset);
         arrayLengths.push(tag.length);
         mention_types.push("p");
       }
@@ -205,6 +222,9 @@ module.exports = function (defaultFuncs, api, ctx) {
       };
     }
     const mqttClient = ctx.mqttClient;
+    if (!mqttClient || typeof mqttClient.publish !== "function") {
+      return callback({ error: "No MQTT client available — call api.listenMqtt() first, or use sendMessage (HTTP fallback)." });
+    }
     form.payload.tasks.forEach((task) => {
       task.payload = JSON.stringify(task.payload);
     });
@@ -215,10 +235,10 @@ module.exports = function (defaultFuncs, api, ctx) {
       JSON.stringify(form),
       function (err, data) {
         if (err) {
-          console.error("Error publishing message: ", err);
+          log.error("sendMessageMqtt", "Error publishing message:", err);
           callback(err);
         } else {
-          console.log("Message published successfully with data: ", data);
+          log.verbose("sendMessageMqtt", "Message published, waiting for broker ack");
           callback(null, data);
         }
       },
@@ -258,10 +278,7 @@ module.exports = function (defaultFuncs, api, ctx) {
     }
 
     const timestamp = Date.now();
-    // get full date time
-    const epoch = timestamp << 22;
-    //const otid = epoch + 0; // TODO replace with randomInt(0, 2**22)
-    const otid = epoch + Math.floor(Math.random() * 4194304);
+    const otid = utils.generateOfflineThreadingID();
 
     const form = {
       app_id: "2220391788200892",
@@ -302,7 +319,7 @@ module.exports = function (defaultFuncs, api, ctx) {
         version_id: "6120284488008082",
         data_trace_id: null,
       },
-      request_id: 1,
+      request_id: ++requestIdCounter,
       type: 3,
     };
 

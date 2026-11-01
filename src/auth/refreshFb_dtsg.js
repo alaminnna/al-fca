@@ -1,6 +1,7 @@
 "use strict";
 
 const utils = require("../../utils");
+var log = require("../core/logger");
 // @NethWs3Dev
 
 module.exports = function (defaultFuncs, api, ctx) {
@@ -62,6 +63,10 @@ module.exports = function (defaultFuncs, api, ctx) {
           }
           ctx.fb_dtsg = fb_dtsg;
           ctx.jazoest = jazoest;
+          // makeDefaults/parseAndCheckLogin derive jazoest into ctx.ttstamp —
+          // update it too, otherwise the refresh never takes effect.
+          ctx.ttstamp = "2";
+          for (let i = 0; i < fb_dtsg.length; i++) ctx.ttstamp += fb_dtsg.charCodeAt(i);
           callback(null, {
             data: {
               fb_dtsg: fb_dtsg,
@@ -71,7 +76,7 @@ module.exports = function (defaultFuncs, api, ctx) {
           });
         })
         .catch(function (err) {
-          console.error("refreshFb_dtsg", err);
+          log.error("refreshFb_dtsg", err);
           return callback(err);
         });
     } else {

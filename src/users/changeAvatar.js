@@ -1,6 +1,7 @@
 "use strict";
 
 const utils = require("../../utils");
+var log = require("../core/logger");
 // @NethWs3Dev
 
 module.exports = function (defaultFuncs, api, ctx) {
@@ -37,7 +38,7 @@ module.exports = function (defaultFuncs, api, ctx) {
         callback(null, resData);
       })
       .catch(function (err) {
-        console.error("handleUpload", err);
+        log.error("handleUpload", err);
         return callback(err);
       });
   }
@@ -126,7 +127,7 @@ module.exports = function (defaultFuncs, api, ctx) {
           return callback(null, resData[0].data.profile_picture_set);
         })
         .catch(function (err) {
-          console.error("changeAvatar", err);
+          log.error("changeAvatar", err);
           return callback(err);
         });
     });

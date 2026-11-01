@@ -1,23 +1,17 @@
 "use strict";
 
-/*
-@NethWs3Dev
-*/
-
 // @NethWs3Dev
-module.exports = function (defaultFuncs, api, ctx){
-  return function stopListenMqtt() {
-    if (!ctx.mqttClient) {
-      throw new Error("Not connected to MQTT");
+//
+// Standalone stop helper. Delegates to the MessageEmitter's stopListening so
+// there is exactly one implementation of connection teardown.
+
+module.exports = function (defaultFuncs, api, ctx) {
+  return function stopListenMqtt(callback) {
+    if (typeof api.stopListening === "function") {
+      return api.stopListening(callback);
     }
-    console.log("stopListenMqtt", "Stopping...");
-    ctx.mqttClient.unsubscribe("/webrtc");
-    ctx.mqttClient.unsubscribe("/rtc_multi");
-    ctx.mqttClient.unsubscribe("/onevc");
-    ctx.mqttClient.publish("/browser_close", "{}");
-    ctx.mqttClient.end(false, (...data) => {
-      console.log("stopListenMqtt", "Stopped");
-      ctx.mqttClient = null;
-    });
-  }
+    const err = new Error("Not connected to MQTT — no active listener (call api.listenMqtt() first)");
+    if (typeof callback === "function") return callback(err);
+    return Promise.reject(err);
+  };
 };

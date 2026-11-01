@@ -3,6 +3,7 @@
 
 var utils = require('../../utils');
 var log = require('npmlog');
+var log = require("../core/logger");
 
 module.exports = function (http, api, ctx) {
   function formatData(res) {
@@ -44,7 +45,7 @@ module.exports = function (http, api, ctx) {
         return cb(null, res.data.sticker_search.sticker_results.edges.map(formatData));
       })
       .catch(function (err) {
-        console.error('searchStickers', err);
+        log.error('searchStickers', err);
         return cb(err);
       });
     return returnPromise;

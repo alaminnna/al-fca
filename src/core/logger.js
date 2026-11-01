@@ -100,6 +100,7 @@ function resolveLevel(name) {
 }
 
 var currentLevel = resolveLevel(process.env.AL_FCA_LOG_LEVEL || "info");
+var paused = false;
 
 function allowed(level) {
   if (currentLevel === "silent") return false;
@@ -179,20 +180,15 @@ function resumeSpinner(sp) {
 }
 
 // Every log prints at column 0 on a fresh line; spinner never shares a line.
+// NOTE: console.log is intentionally NOT monkey-patched by this library —
+// redirecting it process-wide broke consumers piping stdout.
 function printStderrLine(line) {
+  if (paused) return;
   var alive = activeSpinners.length > 0;
   if (alive) stopAllSpinnerLines();
   try { process.stderr.write(line + "\n"); } catch (_) {}
   if (alive) resumeAllSpinnerLines();
 }
-
-// Wrap console.log so direct console.log calls also dodge the spinner.
-try {
-  console.log = function () {
-    var line = util.format.apply(null, arguments);
-    printStderrLine(line);
-  };
-} catch (_) {}
 
 function elapsedStr(start) {
   var s = (Date.now() - start) / 1000;
@@ -497,24 +493,13 @@ async function banner(name, subtitle) {
 }
 
 // ------------------------------------------------------- exit sequence
-var exitHooked = false;
+// Only a synchronous "exit" hook (spinner cleanup). This library must never
+// own SIGINT — that belongs to the consumer application.
 function shutdown() {
   stopAllSpinnerLines();
   showCursor();
 }
-function hookExit() {
-  if (exitHooked) return;
-  exitHooked = true;
-  try {
-    process.on("exit", function () { shutdown(); });
-    process.on("SIGINT", function () {
-      shutdown();
-      try { process.stderr.write(dim("◦ session closed") + "\n"); } catch (_) {}
-      try { process.exit(130); } catch (_) {}
-    });
-  } catch (_) {}
-}
-hookExit();
+try { process.on("exit", function () { shutdown(); }); } catch (_) {}
 
 // ------------------------------------------------------- exports
 var log = {
@@ -550,8 +535,8 @@ var log = {
   setLevel: function (name) { currentLevel = resolveLevel(name); },
   getLevel: function () { return currentLevel; },
   maxRecordSize: 100,
-  pause: function () {},
-  resume: function () {}
+  pause: function () { paused = true; },
+  resume: function () { paused = false; }
 };
 
 Object.defineProperty(log, "level", {

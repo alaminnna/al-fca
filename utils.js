@@ -7,17 +7,16 @@
 var url = require("url");
 var log = require("./src/core/logger");
 var stream = require("stream");
-var bluebird = require("bluebird");
 var querystring = require("querystring");
-var request = bluebird.promisify(require("request").defaults({ jar: true }));
+var httpClient = require("./src/transport/http-client");
+var request = httpClient.request;
 
 /**
  * @param {any} url
  */
 
 function setProxy(url) {
-    if (typeof url == "undefined") return request = bluebird.promisify(require("request").defaults({ jar: true }));
-    return request = bluebird.promisify(require("request").defaults({ jar: true, proxy: url }));
+    return httpClient.setProxy(url);
 }
 
 /**
@@ -2593,7 +2592,7 @@ function makeDefaults(html, userID, ctx) {
 function parseAndCheckLogin(ctx, defaultFuncs, retryCount) {
     if (retryCount == undefined) retryCount = 0;
     return function (data) {
-        return bluebird.try(function () {
+        return Promise.resolve().then(function () {
             log.verbose("parseAndCheckLogin", data.body);
             if (data.statusCode >= 500 && data.statusCode < 600) {
                 if (retryCount >= 5) {
@@ -2607,8 +2606,9 @@ function parseAndCheckLogin(ctx, defaultFuncs, retryCount) {
                 var retryTime = Math.floor(Math.random() * 5000);
                 log.warn("parseAndCheckLogin", "Got status code " + data.statusCode + " - " + retryCount + ". attempt to retry in " + retryTime + " milliseconds...");
                 var url = data.request.uri.protocol + "//" + data.request.uri.hostname + data.request.uri.pathname;
-                if (data.request.headers["Content-Type"].split(";")[0] === "multipart/form-data") return bluebird.delay(retryTime).then(() => defaultFuncs.postFormData(url, ctx.jar, data.request.formData, {})).then(parseAndCheckLogin(ctx, defaultFuncs, retryCount));
-                else return bluebird.delay(retryTime).then(() => defaultFuncs.post(url, ctx.jar, data.request.formData)).then(parseAndCheckLogin(ctx, defaultFuncs, retryCount));
+                var retryDelay = new Promise(function (resolve) { setTimeout(resolve, retryTime); });
+                if (data.request.headers["Content-Type"].split(";")[0] === "multipart/form-data") return retryDelay.then(() => defaultFuncs.postFormData(url, ctx.jar, data.request.formData, {})).then(parseAndCheckLogin(ctx, defaultFuncs, retryCount));
+                else return retryDelay.then(() => defaultFuncs.post(url, ctx.jar, data.request.formData)).then(parseAndCheckLogin(ctx, defaultFuncs, retryCount));
             }
             if (data.statusCode !== 200) throw new Error("parseAndCheckLogin got status code: " + data.statusCode + ". Bailing out of trying to parse response.");
 
@@ -2971,7 +2971,30 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * Error type carrying a structured payload. Used by several API modules for
+ * input-validation failures; previously referenced but never defined, which
+ * made those paths throw a confusing TypeError instead.
+ */
+class CustomError extends Error {
+    constructor(errorData) {
+        const message = typeof errorData === "string"
+            ? errorData
+            : (errorData && errorData.error) ? String(errorData.error) : "AL-FCA error";
+        super(message);
+        this.name = "CustomError";
+        if (errorData && typeof errorData === "object") {
+            Object.assign(this, errorData);
+            this.error = errorData.error !== undefined ? errorData.error : message;
+        } else {
+            this.error = message;
+        }
+        if (Error.captureStackTrace) Error.captureStackTrace(this, CustomError);
+    }
+}
+
 module.exports = {
+    CustomError: CustomError,
     cleanHTML,
     isReadableStream: isReadableStream,
     get: get,
@@ -2984,7 +3007,7 @@ module.exports = {
     makeParsable: makeParsable,
     arrToForm: arrToForm,
     getSignatureID: getSignatureID,
-    getJar: request.jar,
+    getJar: httpClient.jar,
     generateTimestampRelative: generateTimestampRelative,
     makeDefaults: makeDefaults,
     parseAndCheckLogin: parseAndCheckLogin,

@@ -1,82 +1,44 @@
-const axios = require('axios');
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-var log = require('./src/core/logger');
+"use strict";
 
-function getCurrentVersion() {
-    // 1. If this file is inside the al-fca package itself (development mode), use its own package.json
-    try {
-        const ownPkg = path.join(__dirname, 'package.json');
-        if (fs.existsSync(ownPkg)) {
-            const pkg = JSON.parse(fs.readFileSync(ownPkg, 'utf-8'));
-            if (pkg.name === 'al-fca' && pkg.version) return pkg.version;
-        }
-    } catch (_) { }
+/*
+ * Update notification for AL-FCA.
+ *
+ * IMPORTANT (security): this module only *notifies*. It never installs
+ * packages, never runs child processes, never modifies package.json and
+ * never exits the consumer's application. Updates are the application
+ * owner's decision: run `npm install @alaminnna/al-fca@latest` yourself.
+ *
+ * The check is opt-in: call `checkForFCAUpdate()` explicitly, or pass
+ * `autoUpdateCheck: true` in login options to allow a single notify-only
+ * check per process. Nothing runs at require() time.
+ */
 
-    // 2. Installed as dependency in a user's project
-    try {
-        const nodeModulesPkg = path.join(process.cwd(), 'node_modules', 'al-fca', 'package.json');
-        if (fs.existsSync(nodeModulesPkg)) {
-            const pkg = JSON.parse(fs.readFileSync(nodeModulesPkg, 'utf-8'));
-            if (pkg.version) return pkg.version;
-        }
-    } catch (_) { }
+const fs = require("fs");
+const path = require("path");
 
-    return '1.0.0';
+var log;
+try { log = require("./src/core/logger"); } catch (_) { log = null; }
+function _log(level, prefix, msg) {
+    if (log && typeof log[level] === "function") log[level](prefix, msg);
 }
 
-async function checkForFCAUpdate() {
+const PKG_NAME = "@alaminnna/al-fca";
+const REGISTRY_URL = "https://registry.npmjs.org/" + encodeURIComponent(PKG_NAME).replace("%40", "@") + "/latest";
+
+let _checkedThisProcess = false;
+
+function getCurrentVersion() {
     try {
-        log.info("update", "Checking for AL-FCA updates...");
-
-        const { data: npmData } = await axios.get(
-            'https://registry.npmjs.org/al-fca/latest'
-        );
-
-        const latestVersion = npmData.version;
-        const currentVersion = getCurrentVersion();
-
-        if (latestVersion !== currentVersion) {
-            const isNewer = compareVersions(latestVersion, currentVersion) > 0;
-            if (!isNewer) {
-                log.success("AL-FCA is up to date (v" + currentVersion + ")");
-                return false;
-            }
-
-            log.warn("update", "New AL-FCA version available: " + latestVersion + " (current: " + currentVersion + ")");
-            log.info("update", "Updating AL-FCA package...");
-
-            try {
-                const { data: changesData } = await axios.get(
-                    'https://raw.githubusercontent.com/alaminnna/al-fca/main/CHANGELOG.md'
-                );
-                log.info("update", "Recent changes:");
-                const latestChanges = changesData.split('##')[1]?.split('\n').slice(0, 5).join('\n');
-                if (latestChanges) log.raw(latestChanges);
-            } catch (_) { }
-
-            await updateNpmPackage(latestVersion);
-            await updateUserPackageJson(latestVersion);
-
-            log.success("AL-FCA updated successfully!");
-            log.info("update", "Restarting to apply changes...");
-
-            setTimeout(() => { process.exit(2); }, 1000);
-            return true;
-        } else {
-            log.success("AL-FCA is up to date (v" + currentVersion + ")");
-            return false;
-        }
-    } catch (error) {
-        log.error("update", "Failed to check for AL-FCA updates: " + error.message);
-        return false;
-    }
+        const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf-8"));
+        if (pkg.version) return pkg.version;
+    } catch (_) { }
+    return null;
 }
 
 function compareVersions(a, b) {
-    var pa = a.split('.').map(Number);
-    var pb = b.split('.').map(Number);
+    if (a == null || b == null) return 0;
+    var pa = String(a).split(".").map(Number);
+    var pb = String(b).split(".").map(Number);
     for (var i = 0; i < 3; i++) {
         var na = pa[i] || 0, nb = pb[i] || 0;
         if (na > nb) return 1;
@@ -85,33 +47,40 @@ function compareVersions(a, b) {
     return 0;
 }
 
-async function updateNpmPackage(version) {
-    try {
-        log.info("update", "Running npm install al-fca@" + version + "...");
-        execSync(`npm install al-fca@${version} --save`, { cwd: process.cwd(), stdio: 'inherit' });
-        log.success("Package installed successfully!");
-        return true;
-    } catch (error) {
-        log.error("update", "Failed to install package: " + error.message);
-        throw error;
+/**
+ * Notify-only update check. Never has side effects beyond one HTTPS GET
+ * to the npm registry.
+ *
+ * @param {object} [opts]
+ * @param {number} [opts.timeoutMs=5000] network timeout.
+ * @returns {Promise<{current: string|null, latest: string|null, updateAvailable: boolean, checked: boolean}>}
+ */
+async function checkForFCAUpdate(opts) {
+    opts = opts || {};
+    var current = getCurrentVersion();
+
+    if (_checkedThisProcess && !opts.force) {
+        return { current: current, latest: null, updateAvailable: false, checked: false };
     }
+    _checkedThisProcess = true;
+
+    let latest = null;
+    try {
+        // Lazy require so the HTTP client is only loaded when a check actually runs.
+        const axios = require("axios");
+        const res = await axios.get(REGISTRY_URL, { timeout: opts.timeoutMs || 5000 });
+        latest = res.data && res.data.version ? res.data.version : null;
+    } catch (error) {
+        _log("warn", "update", "Could not check for AL-FCA updates: " + (error && error.message ? error.message : error));
+        return { current: current, latest: null, updateAvailable: false, checked: false };
+    }
+
+    var updateAvailable = compareVersions(latest, current) > 0;
+    if (updateAvailable) {
+        _log("info", "update", "AL-FCA " + latest + " is available (installed: " + current + ").");
+        _log("info", "update", "To update, run: npm install " + PKG_NAME + "@latest");
+    }
+    return { current: current, latest: latest, updateAvailable: updateAvailable, checked: true };
 }
 
-async function updateUserPackageJson(version) {
-    try {
-        const userPackageJsonPath = path.join(process.cwd(), 'package.json');
-        if (!fs.existsSync(userPackageJsonPath)) return;
-        const packageJson = JSON.parse(fs.readFileSync(userPackageJsonPath, 'utf-8'));
-        if (packageJson.dependencies && packageJson.dependencies['al-fca']) {
-            packageJson.dependencies['al-fca'] = `^${version}`;
-            fs.writeFileSync(userPackageJsonPath, JSON.stringify(packageJson, null, 2));
-            log.success("Updated package.json to al-fca@" + version);
-        }
-        return true;
-    } catch (error) {
-        log.warn("update", "Failed to update user package.json: " + error.message);
-        return false;
-    }
-}
-
-module.exports = { checkForFCAUpdate, updateNpmPackage, updateUserPackageJson };
+module.exports = { checkForFCAUpdate, compareVersions, getCurrentVersion };

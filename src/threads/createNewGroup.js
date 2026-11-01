@@ -1,6 +1,7 @@
 "use strict";
 
 const utils = require("../../utils");
+var log = require("../core/logger");
 // @NethWs3Dev
 
 module.exports = function (defaultFuncs, api, ctx) {
@@ -79,7 +80,7 @@ module.exports = function (defaultFuncs, api, ctx) {
         );
       })
       .catch(function (err) {
-        console.error("createNewGroup", err);
+        log.error("createNewGroup", err);
         return callback(err);
       });
 

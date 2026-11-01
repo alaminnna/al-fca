@@ -6,6 +6,7 @@
  */
 
 const utils = require("../../utils");
+var log = require("../core/logger");
 // ST | Sheikh Tamim 
 
 function formatMessage(threadID, data) {
@@ -306,7 +307,7 @@ module.exports = function (defaultFuncs, api, ctx) {
         }
       })
       .catch((err) => {
-        console.error("getMessage", err);
+        log.error("getMessage", err);
         callback(err);
       });
 

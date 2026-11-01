@@ -1,6 +1,7 @@
 "use strict";
 
 const utils = require("../../utils");
+var log = require("../core/logger");
 // @NethWs3Dev
 
 function getExtension(original_extension, filename = "") {
@@ -671,7 +672,7 @@ module.exports = function (defaultFuncs, api, ctx) {
         callback(null, formatMessagesGraphQLResponse(resData[0]));
       })
       .catch(function (err) {
-        console.error("getThreadHistoryGraphQL", err);
+        log.error("getThreadHistoryGraphQL", err);
         return callback(err);
       });
 

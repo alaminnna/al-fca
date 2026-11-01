@@ -18,7 +18,7 @@ module.exports = function (defaultFuncs, api, ctx) {
 		}
 		// ── end E2EE typing ─────────────────────────────────────────────────────
 
-		const mqttClient = ctx.mqttClient || global.mqttClient;
+		const mqttClient = ctx.mqttClient;
 		if (!mqttClient) {
 			if (typeof callback === 'function') callback(new Error('No MQTT client available for typing indicator'));
 			return;

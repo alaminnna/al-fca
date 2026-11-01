@@ -1,6 +1,7 @@
 "use strict";
 
 const utils = require("../../utils");
+var log = require("../core/logger");
 // @NethWs3Dev
 
 // [almost] copy pasted from one of FB's minified file (GenderConst)
@@ -74,7 +75,7 @@ module.exports = function (defaultFuncs, api, ctx) {
         callback(null, formatData(resData.payload));
       })
       .catch(function (err) {
-        console.error("getFriendsList", err);
+        log.error("getFriendsList", err);
         return callback(err);
       });
 

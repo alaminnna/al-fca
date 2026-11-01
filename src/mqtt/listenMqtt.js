@@ -1,49 +1,39 @@
-/* eslint-disable no-redeclare */
 "use strict";
 var utils = require("../../utils");
-var log = require("npmlog");
+var log = require("../core/logger");
 var mqtt = require('mqtt');
 var WebSocket = require('ws');
 var Transform = require('stream').Transform;
-const EventEmitter = require('events');
+var EventEmitter = require('events');
 var e2eeBridge = require("../../e2ee");
 
 // ─── ANSI colour helpers ───────────────────────────────────────────────────────
 var C = {
     reset:   '\x1b[0m',
-    bold:    '\x1b[1m',
+    bold:   '\x1b[1m',
     dim:     '\x1b[2m',
-    // foregrounds
-    black:   '\x1b[30m',
-    red:     '\x1b[31m',
-    green:   '\x1b[32m',
-    yellow:  '\x1b[33m',
-    blue:    '\x1b[34m',
-    magenta: '\x1b[35m',
-    cyan:    '\x1b[36m',
-    white:   '\x1b[37m',
-    // bright foregrounds
-    bBlack:   '\x1b[90m',
-    bRed:     '\x1b[91m',
-    bGreen:   '\x1b[92m',
-    bYellow:  '\x1b[93m',
-    bBlue:    '\x1b[94m',
-    bMagenta: '\x1b[95m',
-    bCyan:    '\x1b[96m',
-    bWhite:   '\x1b[97m',
-    // backgrounds
-    bgBlue:    '\x1b[44m',
-    bgCyan:    '\x1b[46m',
-    bgMagenta: '\x1b[45m',
-    bgGreen:   '\x1b[42m',
-    bgBlack:   '\x1b[40m',
+    bCyan:   '\x1b[96m',
+    bGreen:  '\x1b[92m',
+    bWhite:  '\x1b[97m',
+    bYellow: '\x1b[93m',
+    bMagenta:'\x1b[95m',
+    bBlue:   '\x1b[94m',
+    bRed:    '\x1b[91m',
+    cyan:    '\x1b[36m'
 };
 
-// ─── MQTT Spinner ──────────────────────────────────────────────────────────────
+var TTY = !!(process.stdout && process.stdout.isTTY);
+
+function safeJsonParse(str, fallback) {
+    try { return JSON.parse(str); } catch (_) { return fallback; }
+}
+
+// ─── MQTT connecting spinner (TTY only) ────────────────────────────────────────
 var _mqttSpinner = null;
 
 function startMqttSpinner(region) {
-    var frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+    if (!TTY) return;
+    var frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
     var fi = 0;
     var regionStr = region ? (' ' + C.dim + C.bCyan + '[' + region.toUpperCase() + ']' + C.reset) : '';
     process.stdout.write('\n');
@@ -66,12 +56,16 @@ function stopMqttSpinner() {
         clearInterval(_mqttSpinner);
         _mqttSpinner = null;
     }
-    // erase the spinner line completely
-    process.stdout.write('\r\x1b[2K');
+    if (TTY) process.stdout.write('\r\x1b[2K');
 }
 
 function printMqttBanner(region, autoReconnect) {
     stopMqttSpinner();
+    if (!TTY) {
+        log.info("listenMqtt", "MQTT connected" + (region ? " (region " + region.toUpperCase() + ")" : "") +
+            ", auto-reconnect " + (autoReconnect ? "on" : "off"));
+        return;
+    }
 
     var titleClr  = C.bold + C.bGreen;
     var labelClr  = C.bold + C.bWhite;
@@ -82,7 +76,7 @@ function printMqttBanner(region, autoReconnect) {
     var rst       = C.reset;
 
     var regionVal = (region || '').toUpperCase();
-    var reconnTxt = autoReconnect ? 'Enabled (3s)' : 'Disabled';
+    var reconnTxt = autoReconnect ? 'Enabled (backoff)' : 'Disabled';
     var reconnClr = autoReconnect ? C.bGreen : C.bRed;
     var reconnVal = reconnClr + reconnTxt + rst;
 
@@ -123,7 +117,7 @@ function printMqttBanner(region, autoReconnect) {
 
     process.stdout.write('\n');
     rows.forEach(function (line) {
-        console.log(line);
+        log.info(line);
     });
     process.stdout.write('\n');
 }
@@ -134,9 +128,6 @@ function printMqttBanner(region, autoReconnect) {
  * mqtt-packet strictly rejects these. This transform stream patches
  * the first byte of each MQTT frame to clear the lower nibble (flags),
  * keeping only the packet type (upper nibble).
- *
- * MQTT fixed header: byte[0] = (type << 4) | flags
- * For PUBACK (type=4): valid = 0x40, FB may send 0x4F → we clear to 0x40
  */
 function createMqttPatchStream() {
     var buf = null;
@@ -199,8 +190,6 @@ function createMqttPatchStream() {
 }
 
 var identity = function () { };
-var form = {};
-var getSeqID = function () { };
 
 var topics = [
     "/legacy_web",
@@ -236,265 +225,25 @@ function sanitizeHeaderValue(value) {
     return str;
 }
 
-function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
-    var chatOn = ctx.globalOptions.online;
-    var foreground = false;
-    var sessionID = Math.floor(Math.random() * 9007199254740991) + 1;
-    var GUID = utils.getGUID();
+// Reconnect policy: bounded attempts, exponential backoff with jitter.
+var RECONNECT_BASE_DELAY_MS = 2000;
+var RECONNECT_MAX_DELAY_MS = 30000;
+var RECONNECT_MAX_ATTEMPTS_DEFAULT = 5;
 
-    var username = {
-        u: ctx.userID,
-        s: sessionID,
-        chat_on: chatOn,
-        fg: foreground,
-        d: GUID,
-        ct: 'websocket',
-        aid: '219994525426954',
-        aids: null,
-        mqtt_sid: '',
-        cp: 3,
-        ecp: 10,
-        st: [],
-        pm: [],
-        dc: '',
-        no_auto_fg: true,
-        gas: null,
-        pack: [],
-        p: null,
-        php_override: ""
-    };
-
-    var cookies = ctx.jar.getCookies("https://www.facebook.com").join("; ");
-    var host;
-    if (ctx.mqttEndpoint) {
-        // Ensure no duplicate sid/cid — strip any existing ones then append fresh
-        var baseEndpoint = ctx.mqttEndpoint
-            .replace(/[?&]sid=[^&]*/g, '')
-            .replace(/[?&]cid=[^&]*/g, '');
-        // Re-attach the ? if it was stripped along with the first param
-        if (baseEndpoint.indexOf('?') === -1 && ctx.mqttEndpoint.indexOf('?') !== -1) {
-            baseEndpoint = baseEndpoint.replace(/&/, '?');
-        }
-        var sep = baseEndpoint.indexOf('?') === -1 ? '?' : '&';
-        host = baseEndpoint + sep + "sid=" + sessionID + "&cid=" + GUID;
-    } else if (ctx.region) {
-        host = "wss://edge-chat.facebook.com/chat?region=" + ctx.region.toLowerCase() + "&sid=" + sessionID + "&cid=" + GUID;
-    } else {
-        host = "wss://edge-chat.facebook.com/chat?sid=" + sessionID + "&cid=" + GUID;
-    }
-
-    var ua = ctx.globalOptions.userAgent ||
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Safari/605.1.15";
-
-    var wsHeaders = {
-        Cookie: sanitizeHeaderValue(cookies),
-        Origin: "https://www.facebook.com",
-        "User-Agent": sanitizeHeaderValue(ua),
-        Referer: "https://www.facebook.com/",
-        Host: "edge-chat.facebook.com",
-        Connection: "Upgrade",
-        Upgrade: "websocket",
-        "Sec-WebSocket-Version": "13",
-        "Sec-WebSocket-Extensions": "permessage-deflate; client_max_window_bits",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Cache-Control": "no-cache",
-        Pragma: "no-cache"
-    };
-
-    if (ctx.region) wsHeaders["X-MSGR-Region"] = sanitizeHeaderValue(ctx.region);
-
-    var wsOptions = {
-        headers: wsHeaders,
-        origin: "https://www.facebook.com",
-        protocolVersion: 13,
-        binaryType: "arraybuffer"
-    };
-
-    if (typeof ctx.globalOptions.proxy !== "undefined") {
-        var { HttpsProxyAgent } = require('https-proxy-agent');
-        wsOptions.agent = new HttpsProxyAgent(ctx.globalOptions.proxy);
-    }
-
-    var mqttOptions = {
-        clientId: "mqttwsclient",
-        protocolId: "MQIsdp",
-        protocolVersion: 3,
-        username: JSON.stringify(username),
-        clean: true,
-        keepalive: 30,
-        reschedulePings: true,
-        reconnectPeriod: 0,
-        connectTimeout: 12000
-    };
-
-    // Use MqttClient with a proper Duplex:
-    //   Write side: mqtt → duplex.write → wsStream.write → WebSocket (send to FB)
-    //   Read side:  WebSocket msg → wsStream readable → patcher (fix FB header bits) → duplex.push → mqtt reads
-    function buildStream() {
-        var Duplex = require('stream').Duplex;
-        var ws = new WebSocket(host, wsOptions);
-        ws.on('error', function () { }); // suppress unhandled ws errors
-
-        var wsStream = WebSocket.createWebSocketStream(ws, { objectMode: false });
-        var patcher = createMqttPatchStream();
-
-        // Wire: wsStream readable → patcher → push into duplex
-        wsStream.pipe(patcher);
-
-        var duplex = new Duplex({
-            read: function () { },
-            write: function (chunk, enc, cb) {
-                wsStream.write(chunk, enc, cb);
-            },
-            final: function (cb) {
-                wsStream.end(cb);
-            },
-            destroy: function (err, cb) {
-                try { wsStream.destroy(err); } catch (_) { }
-                cb(err);
-            }
-        });
-
-        patcher.on('data', function (data) {
-            if (!duplex.destroyed) duplex.push(data);
-        });
-        patcher.on('end', function () {
-            if (!duplex.destroyed) duplex.push(null);
-        });
-        patcher.on('error', function (e) {
-            if (!duplex.destroyed) duplex.destroy(e);
-        });
-        wsStream.on('error', function (e) {
-            if (!duplex.destroyed) duplex.destroy(e);
-        });
-
-        return duplex;
-    }
-
-    startMqttSpinner(ctx.region);
-
-    ctx.mqttClient = new mqtt.MqttClient(buildStream, mqttOptions);
-    global.mqttClient = ctx.mqttClient;
-
-    var mqttClient = ctx.mqttClient;
-
-    mqttClient.on('error', function (err) {
-        stopMqttSpinner();
-        log.error("listenMqtt", err);
-        mqttClient.end();
-        if (ctx.globalOptions.autoReconnect) getSeqID();
-        else globalCallback({ type: "stop_listen", error: "Connection refused: Server unavailable" }, null);
-    });
-
-    mqttClient.on('close', function () { });
-    mqttClient.on('offline', function () { });
-    mqttClient.on('reconnect', function () { });
-
-    mqttClient.on('connect', function () {
-        topics.forEach(function (topic) { mqttClient.subscribe(topic); });
-
-        printMqttBanner(ctx.region, ctx.globalOptions.autoReconnect);
-
-        var topic;
-        var queue = {
-            sync_api_version: 10,
-            max_deltas_able_to_process: 1000,
-            delta_batch_size: 500,
-            encoding: "JSON",
-            entity_fbid: ctx.userID,
-        };
-
-        if (ctx.syncToken) {
-            topic = "/messenger_sync_get_diffs";
-            queue.last_seq_id = ctx.lastSeqId;
-            queue.sync_token = ctx.syncToken;
-        } else {
-            topic = "/messenger_sync_create_queue";
-            queue.initial_titan_sequence_id = ctx.lastSeqId;
-            queue.device_params = null;
-        }
-
-        mqttClient.publish(topic, JSON.stringify(queue), { qos: 1, retain: false });
-
-        var rTimeout = setTimeout(function () {
-            mqttClient.end();
-            getSeqID();
-        }, 5000);
-
-        ctx.tmsWait = function () {
-            clearTimeout(rTimeout);
-            if (ctx.globalOptions.emitReady) globalCallback({ type: "ready", error: null });
-            delete ctx.tmsWait;
-
-            // ── E2EE bridge init ──────────────────────────────────────────────────
-            ctx._globalCallback = globalCallback;
-            if (ctx.globalOptions.enableE2EE === true) {
-                var bridge = e2eeBridge.createBridge(ctx);
-                if (global.GoatBot) global.GoatBot._e2eeBridge = bridge;
-                bridge.connect(globalCallback).catch(function (err) {
-                    log.error("listenMqtt", "E2EE bridge connect error:", err && err.message ? err.message : err);
-                });
-            } else {
-                if (global.GoatBot) global.GoatBot._e2eeBridge = null;
-            }
-            // ── end E2EE bridge init ──────────────────────────────────────────────
-        };
-    });
-
-    mqttClient.on('message', function (topic, message) {
-        var jsonMessage;
-        try {
-            jsonMessage = JSON.parse(message.toString());
-        } catch (ex) {
-            return log.error("listenMqtt", ex);
-        }
-
-        if (topic === "/t_ms") {
-            if (ctx.tmsWait && typeof ctx.tmsWait === "function") ctx.tmsWait();
-
-            if (jsonMessage.firstDeltaSeqId && jsonMessage.syncToken) {
-                ctx.lastSeqId = jsonMessage.firstDeltaSeqId;
-                ctx.syncToken = jsonMessage.syncToken;
-            }
-
-            if (jsonMessage.lastIssuedSeqId) ctx.lastSeqId = parseInt(jsonMessage.lastIssuedSeqId);
-
-            for (var i in jsonMessage.deltas) {
-                var delta = jsonMessage.deltas[i];
-                parseDelta(defaultFuncs, api, ctx, globalCallback, { "delta": delta });
-            }
-        } else if (topic === "/thread_typing" || topic === "/orca_typing_notifications") {
-            var typ = {
-                type: "typ",
-                isTyping: !!jsonMessage.state,
-                from: jsonMessage.sender_fbid.toString(),
-                threadID: utils.formatID((jsonMessage.thread || jsonMessage.sender_fbid).toString())
-            };
-            (function () { globalCallback(null, typ); })();
-        } else if (topic === "/orca_presence") {
-            if (!ctx.globalOptions.updatePresence) {
-                for (var i in jsonMessage.list) {
-                    var data = jsonMessage.list[i];
-                    var presence = {
-                        type: "presence",
-                        userID: data["u"].toString(),
-                        timestamp: data["l"] * 1000,
-                        statuses: data["p"]
-                    };
-                    (function () { globalCallback(null, presence); })();
-                }
-            }
-        }
-    });
-
-    mqttClient.on('close', function () { });
-}
-
-function attachImageUrlToAttachment(api, attachment) {
+/**
+ * attachImageUrlToAttachment — OPT-IN.
+ *
+ * AL-FCA never re-uploads received user content to third-party hosts by
+ * default. When the bot owner explicitly enables `photoUrlProxy` (and
+ * provides their own ImgBB key via globalOptions.imgbbApiKey), received
+ * photo attachments get a `imgUrl` property from their own account.
+ */
+function attachImageUrlToAttachment(api, attachment, globalOptions) {
+    if (!globalOptions || globalOptions.photoUrlProxy !== true) return;
     if (!attachment || attachment.type !== "photo" || !attachment.url) return;
-    if (api && api._imgUpload) {
-        api._imgUpload(attachment.url).then(function (url) {
+    if (api && typeof api.uploadImageToImgbb === "function") {
+        api.uploadImageToImgbb(attachment.url).then(function (res) {
+            var url = res && res.data ? (res.data.url || res.data.display_url || (res.data.image && res.data.image.url)) : null;
             if (url) attachment.imgUrl = url;
         }).catch(function () { });
     }
@@ -509,14 +258,15 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
                 var fmtMsg;
                 try {
                     fmtMsg = utils.formatDeltaMessage(v);
-                    var otherUserFbId = v.delta.messageMetadata.threadKey.otherUserFbId;
-                    var threadFbId = v.delta.messageMetadata.threadKey.threadFbId;
+                    var threadKey = v.delta.messageMetadata.threadKey || {};
+                    var otherUserFbId = threadKey.otherUserFbId;
+                    var threadFbId = threadKey.threadFbId;
                     fmtMsg.isSingleUser = !!otherUserFbId && !threadFbId;
                     fmtMsg.isGroup = !!threadFbId;
                     if (!ctx.threadTypes) ctx.threadTypes = {};
                     ctx.threadTypes[fmtMsg.threadID] = fmtMsg.isSingleUser ? 'dm' : 'group';
                     if (fmtMsg.attachments && Array.isArray(fmtMsg.attachments)) {
-                        fmtMsg.attachments.forEach(function (att) { attachImageUrlToAttachment(api, att); });
+                        fmtMsg.attachments.forEach(function (att) { attachImageUrlToAttachment(api, att, ctx.globalOptions); });
                     }
                 } catch (err) {
                     return globalCallback({ error: "Problem parsing message object.", detail: err, res: v, type: "parse_error" });
@@ -529,9 +279,9 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
                     undefined :
                     (function () { globalCallback(null, fmtMsg); })();
             } else {
-                if (v.delta.attachments[i].mercury.attach_type == "photo") {
+                if (v.delta.attachments[i] && v.delta.attachments[i].mercury && v.delta.attachments[i].mercury.attach_type == "photo") {
                     api.resolvePhotoUrl(v.delta.attachments[i].fbid, function (err, url) {
-                        if (!err) v.delta.attachments[i].mercury.metadata.url = url;
+                        if (!err && v.delta.attachments[i].mercury.metadata) v.delta.attachments[i].mercury.metadata.url = url;
                         return resolveAttachmentUrl(i + 1);
                     });
                 } else {
@@ -542,15 +292,21 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
     }
 
     if (v.delta.class == "ClientPayload") {
-        var clientPayload = utils.decodeClientPayload(v.delta.payload);
+        var clientPayload;
+        try {
+            clientPayload = utils.decodeClientPayload(v.delta.payload);
+        } catch (err) {
+            return globalCallback({ error: "Problem parsing ClientPayload.", detail: err, type: "parse_error" });
+        }
         if (clientPayload && clientPayload.deltas) {
             for (var i in clientPayload.deltas) {
                 var delta = clientPayload.deltas[i];
                 if (delta.deltaMessageReaction && !!ctx.globalOptions.listenEvents) {
                     (function () {
+                        var tk = delta.deltaMessageReaction.threadKey || {};
                         globalCallback(null, {
                             type: "message_reaction",
-                            threadID: (delta.deltaMessageReaction.threadKey.threadFbId ? delta.deltaMessageReaction.threadKey.threadFbId : delta.deltaMessageReaction.threadKey.otherUserFbId).toString(),
+                            threadID: String(tk.threadFbId || tk.otherUserFbId || ""),
                             messageID: delta.deltaMessageReaction.messageId,
                             reaction: delta.deltaMessageReaction.reaction,
                             senderID: delta.deltaMessageReaction.senderId.toString(),
@@ -559,9 +315,10 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
                     })();
                 } else if (delta.deltaRecallMessageData && !!ctx.globalOptions.listenEvents) {
                     (function () {
+                        var tk = delta.deltaRecallMessageData.threadKey || {};
                         globalCallback(null, {
                             type: "message_unsend",
-                            threadID: (delta.deltaRecallMessageData.threadKey.threadFbId ? delta.deltaRecallMessageData.threadKey.threadFbId : delta.deltaRecallMessageData.threadKey.otherUserFbId).toString(),
+                            threadID: String(tk.threadFbId || tk.otherUserFbId || ""),
                             messageID: delta.deltaRecallMessageData.messageID,
                             senderID: delta.deltaRecallMessageData.senderID.toString(),
                             deletionTimestamp: delta.deltaRecallMessageData.deletionTimestamp,
@@ -569,24 +326,28 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
                         });
                     })();
                 } else if (delta.deltaMessageReply) {
-                    var mdata = delta.deltaMessageReply.message === undefined ? [] :
-                        delta.deltaMessageReply.message.data === undefined ? [] :
-                            delta.deltaMessageReply.message.data.prng === undefined ? [] :
-                                JSON.parse(delta.deltaMessageReply.message.data.prng);
+                    var mdata = safeJsonParse(
+                        delta.deltaMessageReply.message &&
+                        delta.deltaMessageReply.message.data ?
+                        delta.deltaMessageReply.message.data.prng : undefined, []);
                     var m_id = mdata.map(function (u) { return u.i; });
                     var m_offset = mdata.map(function (u) { return u.o; });
                     var m_length = mdata.map(function (u) { return u.l; });
                     var mentions = {};
-                    for (var i = 0; i < m_id.length; i++) mentions[m_id[i]] = (delta.deltaMessageReply.message.body || "").substring(m_offset[i], m_offset[i] + m_length[i]);
+                    for (var j = 0; j < m_id.length; j++) mentions[m_id[j]] = (delta.deltaMessageReply.message.body || "").substring(m_offset[j], m_offset[j] + m_length[j]);
+
+                    var replyMetadata = (delta.deltaMessageReply.message && delta.deltaMessageReply.message.messageMetadata) || {};
+                    var replyThreadKey = replyMetadata.threadKey || {};
+                    var replyCid = replyMetadata.cid || {};
 
                     var callbackToReturn = {
                         type: "message_reply",
-                        threadID: (delta.deltaMessageReply.message.messageMetadata.threadKey.threadFbId ? delta.deltaMessageReply.message.messageMetadata.threadKey.threadFbId : delta.deltaMessageReply.message.messageMetadata.threadKey.otherUserFbId).toString(),
-                        messageID: delta.deltaMessageReply.message.messageMetadata.messageId,
-                        senderID: delta.deltaMessageReply.message.messageMetadata.actorFbId.toString(),
+                        threadID: String(replyThreadKey.threadFbId || replyThreadKey.otherUserFbId || ""),
+                        messageID: replyMetadata.messageId,
+                        senderID: replyMetadata.actorFbId ? replyMetadata.actorFbId.toString() : "",
                         attachments: (delta.deltaMessageReply.message.attachments || []).map(function (att) {
-                            var mercury = JSON.parse(att.mercuryJSON);
-                            Object.assign(att, mercury);
+                            var mercury = safeJsonParse(att.mercuryJSON, null);
+                            if (mercury) Object.assign(att, mercury);
                             return att;
                         }).map(function (att) {
                             var x;
@@ -596,47 +357,48 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
                         }),
                         args: (delta.deltaMessageReply.message.body || "").trim().split(/\s+/),
                         body: (delta.deltaMessageReply.message.body || ""),
-                        isGroup: !!delta.deltaMessageReply.message.messageMetadata.threadKey.threadFbId,
+                        isGroup: !!replyThreadKey.threadFbId,
                         mentions: mentions,
-                        timestamp: delta.deltaMessageReply.message.messageMetadata.timestamp,
-                        participantIDs: (delta.deltaMessageReply.message.messageMetadata.cid.canonicalParticipantFbids || delta.deltaMessageReply.message.participants || []).map(function (e) { return e.toString(); })
+                        timestamp: replyMetadata.timestamp,
+                        participantIDs: (replyCid.canonicalParticipantFbids || delta.deltaMessageReply.message.participants || []).map(function (e) { return e.toString(); })
                     };
 
                     if (callbackToReturn.attachments && Array.isArray(callbackToReturn.attachments)) {
-                        callbackToReturn.attachments.forEach(function (att) { attachImageUrlToAttachment(api, att); });
+                        callbackToReturn.attachments.forEach(function (att) { attachImageUrlToAttachment(api, att, ctx.globalOptions); });
                     }
 
                     if (delta.deltaMessageReply.repliedToMessage) {
-                        mdata = delta.deltaMessageReply.repliedToMessage === undefined ? [] :
-                            delta.deltaMessageReply.repliedToMessage.data === undefined ? [] :
-                                delta.deltaMessageReply.repliedToMessage.data.prng === undefined ? [] :
-                                    JSON.parse(delta.deltaMessageReply.repliedToMessage.data.prng);
+                        mdata = safeJsonParse(
+                            delta.deltaMessageReply.repliedToMessage.data ?
+                            delta.deltaMessageReply.repliedToMessage.data.prng : undefined, []);
                         m_id = mdata.map(function (u) { return u.i; });
                         m_offset = mdata.map(function (u) { return u.o; });
                         m_length = mdata.map(function (u) { return u.l; });
                         var rmentions = {};
-                        for (var i = 0; i < m_id.length; i++) rmentions[m_id[i]] = (delta.deltaMessageReply.repliedToMessage.body || "").substring(m_offset[i], m_offset[i] + m_length[i]);
+                        for (var k = 0; k < m_id.length; k++) rmentions[m_id[k]] = (delta.deltaMessageReply.repliedToMessage.body || "").substring(m_offset[k], m_offset[k] + m_length[k]);
 
+                        var rtMetadata = delta.deltaMessageReply.repliedToMessage.messageMetadata || {};
+                        var rtThreadKey = rtMetadata.threadKey || {};
                         callbackToReturn.messageReply = {
-                            threadID: (delta.deltaMessageReply.repliedToMessage.messageMetadata.threadKey.threadFbId ? delta.deltaMessageReply.repliedToMessage.messageMetadata.threadKey.threadFbId : delta.deltaMessageReply.repliedToMessage.messageMetadata.threadKey.otherUserFbId).toString(),
-                            messageID: delta.deltaMessageReply.repliedToMessage.messageMetadata.messageId,
-                            senderID: delta.deltaMessageReply.repliedToMessage.messageMetadata.actorFbId.toString(),
-                            attachments: delta.deltaMessageReply.repliedToMessage.attachments.map(function (att) {
-                                var mercury = JSON.parse(att.mercuryJSON);
-                                Object.assign(att, mercury);
+                            threadID: String(rtThreadKey.threadFbId || rtThreadKey.otherUserFbId || ""),
+                            messageID: rtMetadata.messageId,
+                            senderID: rtMetadata.actorFbId ? rtMetadata.actorFbId.toString() : "",
+                            attachments: (delta.deltaMessageReply.repliedToMessage.attachments || []).map(function (att) {
+                                var mercury = safeJsonParse(att.mercuryJSON, null);
+                                if (mercury) Object.assign(att, mercury);
                                 return att;
                             }).map(function (att) {
                                 var x;
                                 try { x = utils._formatAttachment(att); }
                                 catch (ex) { x = att; x.error = ex; x.type = "unknown"; }
-                                attachImageUrlToAttachment(api, x);
+                                attachImageUrlToAttachment(api, x, ctx.globalOptions);
                                 return x;
                             }),
                             args: (delta.deltaMessageReply.repliedToMessage.body || "").trim().split(/\s+/),
                             body: delta.deltaMessageReply.repliedToMessage.body || "",
-                            isGroup: !!delta.deltaMessageReply.repliedToMessage.messageMetadata.threadKey.threadFbId,
+                            isGroup: !!rtThreadKey.threadFbId,
                             mentions: rmentions,
-                            timestamp: delta.deltaMessageReply.repliedToMessage.messageMetadata.timestamp
+                            timestamp: rtMetadata.timestamp
                         };
                     } else if (delta.deltaMessageReply.replyToMessageId) {
                         return defaultFuncs
@@ -669,7 +431,7 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
                                         var x;
                                         try { x = utils._formatAttachment({ blob_attachment: att }); }
                                         catch (ex) { x = att; x.error = ex; x.type = "unknown"; }
-                                        attachImageUrlToAttachment(api, x);
+                                        attachImageUrlToAttachment(api, x, ctx.globalOptions);
                                         return x;
                                     }),
                                     args: (fetchData.message.text || "").trim().split(/\s+/) || [],
@@ -725,12 +487,12 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
                 case "change_thread_approval_mode":
                 case "messenger_call_log":
                 case "participant_joined_group_call": {
-                    var fmtMsg;
-                    try { fmtMsg = utils.formatDeltaEvent(v.delta); }
+                    var fmtMsg2;
+                    try { fmtMsg2 = utils.formatDeltaEvent(v.delta); }
                     catch (err) {
                         return globalCallback({ error: "Problem parsing message object.", detail: err, res: v.delta, type: "parse_error" });
                     }
-                    return (function () { globalCallback(null, fmtMsg); })();
+                    return (function () { globalCallback(null, fmtMsg2); })();
                 }
                 default: return;
             }
@@ -841,51 +603,420 @@ function markDelivery(ctx, api, threadID, messageID) {
     }
 }
 
+/**
+ * Opens the MQTT connection. `runtime` is the per-listen-session state owned
+ * by the factory below: { isStopped(), scheduleReconnect(reason), seqInFlight }.
+ */
+function listenMqtt(defaultFuncs, api, ctx, globalCallback, runtime) {
+    var chatOn = ctx.globalOptions.online;
+    var foreground = false;
+    var sessionID = Math.floor(Math.random() * 9007199254740991) + 1;
+    var GUID = utils.getGUID();
+
+    var username = {
+        u: ctx.userID,
+        s: sessionID,
+        chat_on: chatOn,
+        fg: foreground,
+        d: GUID,
+        ct: 'websocket',
+        aid: '219994525426954',
+        aids: null,
+        mqtt_sid: '',
+        cp: 3,
+        ecp: 10,
+        st: [],
+        pm: [],
+        dc: '',
+        no_auto_fg: true,
+        gas: null,
+        pack: [],
+        p: null,
+        php_override: ""
+    };
+
+    var cookies = ctx.jar.getCookies("https://www.facebook.com").join("; ");
+    var host;
+    if (ctx.mqttEndpoint) {
+        // Ensure no duplicate sid/cid — strip any existing ones then append fresh
+        var baseEndpoint = ctx.mqttEndpoint
+            .replace(/[?&]sid=[^&]*/g, '')
+            .replace(/[?&]cid=[^&]*/g, '');
+        // Re-attach the ? if it was stripped along with the first param
+        if (baseEndpoint.indexOf('?') === -1 && ctx.mqttEndpoint.indexOf('?') !== -1) {
+            baseEndpoint = baseEndpoint.replace(/&/, '?');
+        }
+        var sep = baseEndpoint.indexOf('?') === -1 ? '?' : '&';
+        host = baseEndpoint + sep + "sid=" + sessionID + "&cid=" + GUID;
+    } else if (ctx.region) {
+        host = "wss://edge-chat.facebook.com/chat?region=" + ctx.region.toLowerCase() + "&sid=" + sessionID + "&cid=" + GUID;
+    } else {
+        host = "wss://edge-chat.facebook.com/chat?sid=" + sessionID + "&cid=" + GUID;
+    }
+
+    var ua = ctx.globalOptions.userAgent ||
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Safari/605.1.15";
+
+    var wsHeaders = {
+        Cookie: sanitizeHeaderValue(cookies),
+        Origin: "https://www.facebook.com",
+        "User-Agent": sanitizeHeaderValue(ua),
+        Referer: "https://www.facebook.com/",
+        Host: "edge-chat.facebook.com",
+        Connection: "Upgrade",
+        Upgrade: "websocket",
+        "Sec-WebSocket-Version": "13",
+        "Sec-WebSocket-Extensions": "permessage-deflate; client_max_window_bits",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache"
+    };
+
+    if (ctx.region) wsHeaders["X-MSGR-Region"] = sanitizeHeaderValue(ctx.region);
+
+    var wsOptions = {
+        headers: wsHeaders,
+        origin: "https://www.facebook.com",
+        protocolVersion: 13,
+        binaryType: "arraybuffer"
+    };
+
+    if (typeof ctx.globalOptions.proxy !== "undefined") {
+        var { HttpsProxyAgent } = require('https-proxy-agent');
+        wsOptions.agent = new HttpsProxyAgent(ctx.globalOptions.proxy);
+    }
+
+    var mqttOptions = {
+        clientId: "mqttwsclient",
+        protocolId: "MQIsdp",
+        protocolVersion: 3,
+        username: JSON.stringify(username),
+        clean: true,
+        keepalive: 30,
+        reschedulePings: true,
+        reconnectPeriod: 0, // reconnect is managed here (bounded + backoff)
+        connectTimeout: 12000
+    };
+
+    // Use MqttClient with a proper Duplex:
+    //   Write side: mqtt → duplex.write → (buffered until ws open) → wsStream → WebSocket
+    //   Read side:  WebSocket msg → wsStream readable → patcher (fix FB header bits) → duplex.push → mqtt reads
+    // Writes issued before the WebSocket handshake completes are buffered and
+    // flushed on 'open' — ws's createWebSocketStream does NOT buffer them, and
+    // mqtt.js sends CONNECT synchronously, before the handshake finishes.
+    function buildStream() {
+        var Duplex = require('stream').Duplex;
+        var ws = new WebSocket(host, wsOptions);
+        ws.on('error', function () { }); // suppressed; surfaced via the duplex below
+
+        var wsStream = WebSocket.createWebSocketStream(ws, { objectMode: false });
+        var patcher = createMqttPatchStream();
+
+        // Wire: wsStream readable → patcher → push into duplex
+        wsStream.pipe(patcher);
+
+        var pendingWrites = [];
+        var isOpen = false;
+
+        ws.on('open', function () {
+            isOpen = true;
+            var item;
+            while ((item = pendingWrites.shift())) {
+                wsStream.write(item.chunk, item.enc, item.cb);
+            }
+        });
+
+        var duplex = new Duplex({
+            read: function () { },
+            write: function (chunk, enc, cb) {
+                if (isOpen) wsStream.write(chunk, enc, cb);
+                else pendingWrites.push({ chunk: chunk, enc: enc, cb: cb });
+            },
+            final: function (cb) {
+                wsStream.end(cb);
+            },
+            destroy: function (err, cb) {
+                pendingWrites = [];
+                try { wsStream.destroy(err); } catch (_) { }
+                try { ws.close(); } catch (_) { }
+                try { ws.terminate(); } catch (_) { }
+                cb(err);
+            }
+        });
+
+        patcher.on('data', function (data) {
+            if (!duplex.destroyed) duplex.push(data);
+        });
+        patcher.on('end', function () {
+            if (!duplex.destroyed) duplex.push(null);
+        });
+        patcher.on('error', function (e) {
+            if (!duplex.destroyed) duplex.destroy(e);
+        });
+        wsStream.on('error', function (e) {
+            if (!duplex.destroyed) duplex.destroy(e);
+        });
+        wsStream.on('close', function () {
+            if (!duplex.destroyed) duplex.destroy();
+        });
+
+        return duplex;
+    }
+
+    startMqttSpinner(ctx.region);
+
+    ctx.mqttClient = new mqtt.MqttClient(buildStream, mqttOptions);
+    var mqttClient = ctx.mqttClient;
+
+    var tmsTimeoutMs = Number(ctx.globalOptions.mqttTmsTimeoutMs) > 0 ? Number(ctx.globalOptions.mqttTmsTimeoutMs) : 5000;
+    var tmsTimer = null;
+
+    function teardownClient() {
+        if (tmsTimer) { clearTimeout(tmsTimer); tmsTimer = null; }
+        try { mqttClient.end(true); } catch (_) { }
+        if (ctx.mqttClient === mqttClient) ctx.mqttClient = undefined;
+    }
+
+    function handleTransportFailure(reason) {
+        stopMqttSpinner();
+        teardownClient();
+        if (runtime.isStopped()) return; // never resurrect a stopped listener
+        if (runtime.scheduleReconnect(reason)) {
+            log.warn("listenMqtt", "connection problem (" + (reason && reason.message ? reason.message : reason) + "), reconnect scheduled");
+        } else {
+            globalCallback({ type: "stop_listen", error: "Connection lost: reconnect attempts exhausted (" + (reason && reason.message ? reason.message : reason) + ")" }, null);
+        }
+    }
+
+    mqttClient.on('error', function (err) {
+        log.error("listenMqtt", err);
+        handleTransportFailure(err);
+    });
+
+    mqttClient.on('connect', function () {
+        runtime.onConnected();
+        topics.forEach(function (topic) {
+            try { mqttClient.subscribe(topic); } catch (_) { }
+        });
+
+        printMqttBanner(ctx.region, ctx.globalOptions.autoReconnect);
+
+        var topic;
+        var queue = {
+            sync_api_version: 10,
+            max_deltas_able_to_process: 1000,
+            delta_batch_size: 500,
+            encoding: "JSON",
+            entity_fbid: ctx.userID,
+        };
+
+        if (ctx.syncToken) {
+            topic = "/messenger_sync_get_diffs";
+            queue.last_seq_id = ctx.lastSeqId;
+            queue.sync_token = ctx.syncToken;
+        } else {
+            topic = "/messenger_sync_create_queue";
+            queue.initial_titan_sequence_id = ctx.lastSeqId;
+            queue.device_params = null;
+        }
+
+        mqttClient.publish(topic, JSON.stringify(queue), { qos: 1, retain: false });
+
+        // If the sync-queue response (/t_ms) never arrives, treat it as a
+        // transport failure and go through the bounded reconnect path.
+        tmsTimer = setTimeout(function () {
+            tmsTimer = null;
+            handleTransportFailure(new Error("t_ms sync response timeout (" + tmsTimeoutMs + "ms)"));
+        }, tmsTimeoutMs);
+
+        ctx.tmsWait = function () {
+            if (tmsTimer) { clearTimeout(tmsTimer); tmsTimer = null; }
+            if (ctx.globalOptions.emitReady) globalCallback({ type: "ready", error: null });
+            delete ctx.tmsWait;
+
+            // ── E2EE bridge init ──────────────────────────────────────────────
+            ctx._globalCallback = globalCallback;
+            if (ctx.globalOptions.enableE2EE === true) {
+                var bridge = e2eeBridge.createBridge(ctx);
+                bridge.connect(globalCallback).catch(function (err) {
+                    log.error("listenMqtt", "E2EE bridge connect error:", err && err.message ? err.message : err);
+                });
+            }
+            // ── end E2EE bridge init ──────────────────────────────────────────
+        };
+    });
+
+    mqttClient.on('message', function (topic, message) {
+        var jsonMessage = safeJsonParse(message.toString(), null);
+        if (jsonMessage === null) {
+            return log.error("listenMqtt", "Unparseable MQTT message on " + topic);
+        }
+
+        if (topic === "/t_ms") {
+            if (ctx.tmsWait && typeof ctx.tmsWait === "function") ctx.tmsWait();
+
+            if (jsonMessage.firstDeltaSeqId && jsonMessage.syncToken) {
+                ctx.lastSeqId = jsonMessage.firstDeltaSeqId;
+                ctx.syncToken = jsonMessage.syncToken;
+            }
+
+            if (jsonMessage.lastIssuedSeqId) ctx.lastSeqId = parseInt(jsonMessage.lastIssuedSeqId);
+
+            var deltas = Array.isArray(jsonMessage.deltas) ? jsonMessage.deltas : [];
+            for (var i = 0; i < deltas.length; i++) {
+                parseDelta(defaultFuncs, api, ctx, globalCallback, { "delta": deltas[i] });
+            }
+        } else if (topic === "/thread_typing" || topic === "/orca_typing_notifications") {
+            var typ = {
+                type: "typ",
+                isTyping: !!jsonMessage.state,
+                from: jsonMessage.sender_fbid && jsonMessage.sender_fbid.toString(),
+                threadID: utils.formatID((jsonMessage.thread || jsonMessage.sender_fbid || "").toString())
+            };
+            (function () { globalCallback(null, typ); })();
+        } else if (topic === "/orca_presence") {
+            if (!ctx.globalOptions.updatePresence) {
+                var list = Array.isArray(jsonMessage.list) ? jsonMessage.list : [];
+                for (var j = 0; j < list.length; j++) {
+                    var data = list[j];
+                    var presence = {
+                        type: "presence",
+                        userID: data["u"].toString(),
+                        timestamp: data["l"] * 1000,
+                        statuses: data["p"]
+                    };
+                    (function () { globalCallback(null, presence); })();
+                }
+            }
+        }
+    });
+}
+
 module.exports = function (defaultFuncs, api, ctx) {
     var globalCallback = identity;
+    var form = null;
+    // Reconnect policy knobs (per API instance)
+    var maxAttempts = Number(ctx.globalOptions.reconnectMaxAttempts) > 0
+        ? Number(ctx.globalOptions.reconnectMaxAttempts)
+        : RECONNECT_MAX_ATTEMPTS_DEFAULT;
+    var baseDelay = Number(ctx.globalOptions.reconnectBaseDelayMs) > 0
+        ? Number(ctx.globalOptions.reconnectBaseDelayMs)
+        : RECONNECT_BASE_DELAY_MS;
 
-    getSeqID = function getSeqID() {
-        ctx.t_mqttCalled = false;
+    var session = {
+        stopped: false,       // stopListening() called — no further reconnects
+        attempts: 0,          // consecutive failed attempts
+        reconnectTimer: null,
+        seqInFlight: false
+    };
+
+    function isStopped() { return session.stopped; }
+
+    // Returns true if a reconnect was scheduled, false when attempts are
+    // exhausted (or autoReconnect is off).
+    function scheduleReconnect(reason) {
+        if (session.stopped) return false;
+        if (session.reconnectTimer) return true; // already scheduled
+        if (ctx.globalOptions.autoReconnect === false) return false;
+        if (session.attempts >= maxAttempts) {
+            log.error("listenMqtt", "Giving up after " + session.attempts + " reconnect attempts. " +
+                "Call api.listenMqtt(...) to listen again.");
+            return false;
+        }
+        var delay = Math.min(baseDelay * Math.pow(2, session.attempts), RECONNECT_MAX_DELAY_MS);
+        delay = Math.round(delay / 2 + Math.random() * (delay / 2)); // jitter: 50–100% of slot
+        session.attempts++;
+        log.warn("listenMqtt", "Reconnect attempt " + session.attempts + "/" + maxAttempts + " in " + delay + "ms" +
+            (reason ? " (last error: " + (reason.message || reason) + ")" : ""));
+        session.reconnectTimer = setTimeout(function () {
+            session.reconnectTimer = null;
+            if (!session.stopped) getSeqID();
+        }, delay);
+        return true;
+    }
+
+    var runtime = {
+        isStopped: isStopped,
+        scheduleReconnect: scheduleReconnect,
+        onConnected: function () {
+            session.attempts = 0; // a successful connect resets the backoff chain
+        }
+    };
+
+    function getSeqID() {
+        if (session.stopped || session.seqInFlight) return;
+        session.seqInFlight = true;
         defaultFuncs
             .post("https://www.facebook.com/api/graphqlbatch/", ctx.jar, form)
             .then(utils.parseAndCheckLogin(ctx, defaultFuncs))
             .then(function (resData) {
+                session.seqInFlight = false;
                 if (utils.getType(resData) != "Array") throw { error: "Not logged in", res: resData };
                 if (resData && resData[resData.length - 1].error_results > 0) throw resData[0].o0.errors;
                 if (resData[resData.length - 1].successful_results === 0) throw { error: "getSeqId: there was no successful_results", res: resData };
                 if (resData[0].o0.data.viewer.message_threads.sync_sequence_id) {
                     ctx.lastSeqId = resData[0].o0.data.viewer.message_threads.sync_sequence_id;
-                    listenMqtt(defaultFuncs, api, ctx, globalCallback);
+                    listenMqtt(defaultFuncs, api, ctx, globalCallback, runtime);
                 } else throw { error: "getSeqId: no sync_sequence_id found.", res: resData };
             })
             .catch(function (err) {
+                session.seqInFlight = false;
                 log.error("getSeqId", err);
                 if (utils.getType(err) == "Object" && err.error === "Not logged in") ctx.loggedIn = false;
-                return globalCallback(err);
+                if (isStopped()) return;
+                // Auth failures are not transient: surface them, don't loop.
+                if (utils.getType(err) == "Object" && err.error === "Not logged in") {
+                    return globalCallback(err);
+                }
+                if (!scheduleReconnect(err)) {
+                    globalCallback({
+                        type: "stop_listen",
+                        error: "Connection failed: reconnect attempts exhausted (" + (err && (err.error || err.message) ? (err.error || err.message) : err) + ")",
+                        detail: err
+                    }, null);
+                }
             });
-    };
+    }
 
     return function (callback) {
         class MessageEmitter extends EventEmitter {
             stopListening(callback) {
-                callback = callback || (function () { });
+                var done = callback || (function () { });
+                session.stopped = true;
+                if (session.reconnectTimer) {
+                    clearTimeout(session.reconnectTimer);
+                    session.reconnectTimer = null;
+                }
                 globalCallback = identity;
-                if (ctx.mqttClient) {
-                    ctx.mqttClient.unsubscribe("/webrtc");
-                    ctx.mqttClient.unsubscribe("/rtc_multi");
-                    ctx.mqttClient.unsubscribe("/onevc");
-                    ctx.mqttClient.publish("/browser_close", "{}");
-                    ctx.mqttClient.end(false, function (...data) {
-                        callback(data);
-                        ctx.mqttClient = undefined;
+                var client = ctx.mqttClient;
+                ctx.mqttClient = undefined;
+                if (client && typeof client.end === 'function') {
+                    try {
+                        client.publish("/browser_close", "{}");
+                    } catch (_) { }
+                    client.end(false, function (...data) {
+                        done(data);
                     });
+                } else {
+                    // No live connection: still resolve so stopListeningAsync()
+                    // cannot hang.
+                    done([]);
+                }
+                // Detach the E2EE bridge session too — it owns its own socket.
+                if (ctx._e2eeBridge && typeof ctx._e2eeBridge.disconnect === 'function') {
+                    try {
+                        var maybe = ctx._e2eeBridge.disconnect();
+                        if (maybe && typeof maybe.catch === 'function') maybe.catch(function () { });
+                    } catch (_) { }
                 }
             }
 
             async stopListeningAsync() {
+                var self = this;
                 return new Promise(function (resolve) {
-                    this.stopListening(resolve);
-                }.bind(this));
+                    self.stopListening(resolve);
+                });
             }
         }
 
@@ -895,9 +1026,16 @@ module.exports = function (defaultFuncs, api, ctx) {
             msgEmitter.emit("message", message);
         });
 
+        // Refuse to open a second concurrent connection with the same ctx —
+        // the previous client would be orphaned and impossible to stop.
+        if (ctx.mqttClient && typeof ctx.mqttClient.end === 'function') {
+            try { ctx.mqttClient.end(true); } catch (_) { }
+            ctx.mqttClient = undefined;
+            log.warn("listenMqtt", "A previous MQTT connection was still open; it has been closed before listening again.");
+        }
+
         if (!ctx.firstListen) ctx.lastSeqId = null;
         ctx.syncToken = undefined;
-        ctx.t_mqttCalled = false;
 
         form = {
             "av": ctx.globalOptions.pageID,
@@ -916,13 +1054,20 @@ module.exports = function (defaultFuncs, api, ctx) {
         };
 
         if (!ctx.firstListen || !ctx.lastSeqId) {
-            getSeqID(defaultFuncs, api, ctx, globalCallback);
+            getSeqID();
         } else {
-            listenMqtt(defaultFuncs, api, ctx, globalCallback);
+            listenMqtt(defaultFuncs, api, ctx, globalCallback, runtime);
         }
 
         api.stopListening = msgEmitter.stopListening.bind(msgEmitter);
         api.stopListeningAsync = msgEmitter.stopListeningAsync.bind(msgEmitter);
         return msgEmitter;
     };
+};
+
+// Test-only internals (not part of the public API contract).
+module.exports._test = {
+    createMqttPatchStream: createMqttPatchStream,
+    parseDelta: parseDelta,
+    sanitizeHeaderValue: sanitizeHeaderValue
 };

@@ -4,7 +4,7 @@ var utils = require("../../utils");
 var log = require("npmlog");
 
 module.exports = function (defaultFuncs, api, ctx) {
-  return function httpGet(url, form, callback, notAPI) {
+  return function httpPost(url, form, callback, notAPI) {
     var resolveFunc = function () { };
     var rejectFunc = function () { };
 

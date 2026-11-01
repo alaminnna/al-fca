@@ -11,6 +11,7 @@
 "use strict";
 
 const utils = require("../../utils");
+var log = require("../core/logger");
 
 module.exports = function (defaultFuncs, api, ctx) {
 /** Developed by Sheikh Tamim | GitHub: sheikhtamimlover | Instagram: @sheikh.tamim_lover */
@@ -129,7 +130,7 @@ module.exports = function (defaultFuncs, api, ctx) {
         callback(null, formattedFriends);
       })
       .catch(function (err) {
-        console.error("searchFriends error:", err);
+        log.error("searchFriends error:", err);
         return callback(err);
       });
 

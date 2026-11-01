@@ -2,6 +2,7 @@
 
 var utils = require('../../utils');
 var log = require('npmlog');
+var log = require("../core/logger");
 
 module.exports = function (defaultFuncs, api, ctx) {
   return function changeUsername(username, callback) {
@@ -12,13 +13,13 @@ module.exports = function (defaultFuncs, api, ctx) {
 
     if (typeof username == 'function') {
      var error = 'username must be a string, and not ' + utils.getType(username);
-      console.error('changeUsername', error);
+      log.error('changeUsername', error);
       return username(error);
     }
     if (typeof callback == 'function') cb = callback;
     if (typeof username != 'string') {
       var error = 'username must be a string, and not ' + utils.getType(username);
-      console.error('changeUsername', error);
+      log.error('changeUsername', error);
       return cb(error);
     }
 
@@ -50,7 +51,7 @@ module.exports = function (defaultFuncs, api, ctx) {
         return cb();
       })
       .catch(function (err) {
-        console.error('changeUsername', err);
+        log.error('changeUsername', err);
         return cb(err);
       });
     

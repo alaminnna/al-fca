@@ -183,8 +183,11 @@ function _mediaCryptoType(mediaType) {
 }
 
 // ── createBridge ──────────────────────────────────────────────────────────────
-global._e2eeMessageMap   = global._e2eeMessageMap   || new Map();
-global._e2eeSenderJidMap = global._e2eeSenderJidMap || new Map();
+// Bounded process-wide correlation maps (messageID → threadJid / senderJid).
+// FIFO eviction prevents unbounded growth on long-running bots.
+var { getSharedMap } = require("./bounded-store");
+global._e2eeMessageMap   = getSharedMap("_e2eeMessageMap", 5000);
+global._e2eeSenderJidMap = getSharedMap("_e2eeSenderJidMap", 5000);
 
 function _regMsg(msgID, jid) {
   if (msgID && jid) global._e2eeMessageMap.set(String(msgID), String(jid));
@@ -201,6 +204,7 @@ function createBridge(ctx) {
     lastGlobalCallback: null,
     connectedEmitted: false,
     reconnectTimer: null,
+    reconnectAttempts: 0,
     lastReadyPayload: null,
     fullyReady: false
   };
@@ -263,8 +267,15 @@ function createBridge(ctx) {
             state.fullyReady = false;
             state.connectedEmitted = false;
             state.listenerAttached = false;
-            log.warn("e2ee", "E2EE disconnected — reconnecting in 5s");
             if (!state.reconnectTimer) {
+              // Bounded exponential backoff: 5s, 10s, 20s, 40s, then give up.
+              if (state.reconnectAttempts >= 4) {
+                log.warn("e2ee", "E2EE reconnect attempts exhausted — call connectE2EE() to retry");
+                break;
+              }
+              var delay = 5000 * Math.pow(2, state.reconnectAttempts);
+              state.reconnectAttempts++;
+              log.warn("e2ee", "E2EE disconnected — reconnecting in " + (delay / 1000) + "s (attempt " + state.reconnectAttempts + "/5)");
               state.reconnectTimer = setTimeout(function () {
                 state.reconnectTimer = null;
                 if (!state.connectingPromise) {
@@ -272,7 +283,7 @@ function createBridge(ctx) {
                     log.error("e2ee", "Reconnect failed:", e && e.message ? e.message : e);
                   });
                 }
-              }, 5000);
+              }, delay);
             }
             _callUserCallback(state.lastGlobalCallback, null, { type: "e2ee_disconnected", isE2EE: true, data: m.info || null });
             break;
@@ -307,6 +318,7 @@ function createBridge(ctx) {
 
       var session = await createFmeSession(ctx, api);
       state.session = session;
+      state.reconnectAttempts = 0; // successful connect resets the backoff chain
       _handleFmeEvents(session);
       state.connected = true;
       state.fullyReady = false;
@@ -345,6 +357,12 @@ function createBridge(ctx) {
     } catch (e) {
       log.warn("e2ee", "disconnect error:", e && e.message ? e.message : e);
     }
+    // Explicit disconnect ends the whole E2EE stack: also stop the local
+    // decrypted-media server and drop its cache.
+    try {
+      var { closeMediaServer } = require("./media-server");
+      await closeMediaServer();
+    } catch (_) { }
   }
 
   async function _ensureSession() {

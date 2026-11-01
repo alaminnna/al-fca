@@ -80,13 +80,13 @@ module.exports = function (defaultFuncs, api, ctx) {
     }
 
     return function uploadAttachment(attachments, callback) {
-        if (
-            !attachments &&
-            !isReadableStream(attachments) &&
-            !getType(attachments) === "Array" &&
-            getType(attachments) === "Array" && !attachments.length
+        if (!attachments ||
+            (getType(attachments) !== "Array" && !isReadableStream(attachments) && !Buffer.isBuffer(attachments)) ||
+            (getType(attachments) === "Array" && attachments.length === 0)
         ) {
-            throw { error: "Please pass an attachment or an array of attachments." };
+            const err = { error: "Please pass an attachment (readable stream) or a non-empty array of attachments." };
+            if (callback) { callback(err); return; }
+            return Promise.reject(err);
         }
 
         let resolveFunc = function () { };

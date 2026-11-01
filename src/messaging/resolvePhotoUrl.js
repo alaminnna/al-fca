@@ -1,6 +1,7 @@
 "use strict";
 
 const utils = require('../../utils');
+var log = require("../core/logger");
 // @NethWs3Dev
 
 module.exports = function (defaultFuncs, api, ctx) {
@@ -36,7 +37,7 @@ module.exports = function (defaultFuncs, api, ctx) {
         return callback(null, photoUrl);
       })
       .catch((err) => {
-        console.error("resolvePhotoUrl", err);
+        log.error("resolvePhotoUrl", err);
         return callback(err);
       });
 

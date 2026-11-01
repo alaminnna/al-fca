@@ -1,12 +1,13 @@
 "use strict";
 
 const utils = require("../../utils");
+const log = require("../core/logger");
 // @NethWs3Dev
 
 module.exports = function (defaultFuncs, api, ctx) {
   return function logout(callback) {
-    let resolveFunc = function () {};
-    let rejectFunc = function () {};
+    let resolveFunc = function () { };
+    let rejectFunc = function () { };
     const returnPromise = new Promise(function (resolve, reject) {
       resolveFunc = resolve;
       rejectFunc = reject;
@@ -20,6 +21,20 @@ module.exports = function (defaultFuncs, api, ctx) {
         resolveFunc(friendList);
       };
     }
+
+    // Tear down live transports first so no further traffic is sent with a
+    // session we are about to invalidate.
+    try {
+      if (ctx.mqttClient && typeof ctx.mqttClient.end === "function") {
+        try { ctx.mqttClient.publish("/browser_close", "{}"); } catch (_) { }
+        ctx.mqttClient.end(true);
+        ctx.mqttClient = undefined;
+      }
+      if (ctx._e2eeBridge && typeof ctx._e2eeBridge.disconnect === "function") {
+        const maybe = ctx._e2eeBridge.disconnect();
+        if (maybe && typeof maybe.catch === "function") maybe.catch(function () { });
+      }
+    } catch (_) { }
 
     const form = {
       pmid: "0",
@@ -62,11 +77,11 @@ module.exports = function (defaultFuncs, api, ctx) {
       })
       .then(function () {
         ctx.loggedIn = false;
-        console.log("logout", "Logged out successfully.");
+        log.info("logout", "Logged out successfully.");
         callback();
       })
       .catch(function (err) {
-        console.error("logout", err);
+        log.error("logout", err);
         return callback(err);
       });
 

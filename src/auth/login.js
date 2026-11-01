@@ -7,7 +7,6 @@
 var utils = require("../../utils");
 var cheerio = require("cheerio");
 var log = require("../core/logger");
-var { checkForFCAUpdate } = require("../../checkUpdate");
 
 function getIndex() {
     return require("../../index.js");
@@ -128,11 +127,19 @@ function loginHelper(appState, email, password, globalOptions, callback, prCallb
                 const cookieName = c.key || c.name;
                 if (!cookieName || !c.value) return;
                 const domain = c.domain || '.facebook.com';
-                const expires = c.expirationDate
-                    ? new Date(c.expirationDate * 1000).toUTCString()
-                    : (c.expires || '');
+                // expirationDate is epoch-seconds in browser exports; some tools
+                // emit an ISO string instead — handle both, drop Invalid Dates.
+                let expires = '';
+                if (c.expirationDate != null && c.expirationDate !== '') {
+                    const ms = typeof c.expirationDate === 'number'
+                        ? c.expirationDate * 1000
+                        : Date.parse(c.expirationDate);
+                    if (!isNaN(ms)) expires = new Date(ms).toUTCString();
+                } else if (c.expires) {
+                    expires = c.expires;
+                }
                 const str = `${cookieName}=${c.value}; expires=${expires}; domain=${domain}; path=${c.path || '/'};`;
-                const url = 'http://' + domain.replace(/^\./, 'www.');
+                const url = 'https://' + domain.replace(/^\./, 'www.');
                 try { jar.setCookie(str, url); } catch (_) { }
             });
 
@@ -200,17 +207,17 @@ function loginHelper(appState, email, password, globalOptions, callback, prCallb
 
 
 function login(loginData, options, callback) {
-    // Check for updates (non-blocking, only once per session)
-    if (!global.alfcaUpdateChecked) {
-        global.alfcaUpdateChecked = true;
-        checkForFCAUpdate().catch(err => {
-            // Silently ignore update check errors to not block login
-        });
-    }
-
+    loginData = loginData || {};
     if (utils.getType(options) === 'Function' || utils.getType(options) === 'AsyncFunction') {
         callback = options;
         options = {};
+    }
+    options = options || {};
+
+    // Notify-only update check, strictly opt-in, at most once per process.
+    if (options.autoUpdateCheck === true) {
+        const { checkForFCAUpdate } = require("../../checkUpdate");
+        checkForFCAUpdate().catch(function () { /* notification only */ });
     }
 
     var globalOptions = {
@@ -244,17 +251,30 @@ function login(loginData, options, callback) {
     }
 
     if (loginData.email && loginData.password) {
-        getIndex().setOptions(globalOptions, {
-            logLevel: "silent",
-            forceLogin: true,
-            userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-        });
+        getIndex().setOptions(globalOptions, options);
+        // Credentials are only sent to facebook.com itself.
+        globalOptions.forceLogin = true;
+        logLevelSilentForPasswordLogin(globalOptions);
         loginHelper(loginData.appState, loginData.email, loginData.password, globalOptions, callback, prCallback);
     } else if (loginData.appState) {
         getIndex().setOptions(globalOptions, options);
-        return loginHelper(loginData.appState, loginData.email, loginData.password, globalOptions, callback, prCallback);
+        loginHelper(loginData.appState, loginData.email, loginData.password, globalOptions, callback, prCallback);
+    } else {
+        const err = new Error(
+            "login: no credentials given. Pass { appState: [...] } (recommended) " +
+            "or { email, password }. Nothing was sent to Facebook."
+        );
+        if (utils.getType(callback) === "Function") callback(err);
+        else return Promise.reject(err);
     }
     return returnPromise;
+}
+
+// Email/password logins are interactive and chatty; keep the log level silent
+// only for that path, without mutating the caller's options object.
+function logLevelSilentForPasswordLogin(globalOptions) {
+    globalOptions.logLevel = "silent";
+    log.setLevel("silent");
 }
 
 module.exports = login;

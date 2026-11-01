@@ -7,6 +7,7 @@
 "use strict";
 
 const utils = require("../../utils");
+var log = require("../core/logger");
 // @NethWs3Dev
 
 function formatData(resData) {
@@ -103,7 +104,7 @@ module.exports = function (defaultFuncs, api, ctx) {
         return callback(null, formatData(resData.data));
       })
       .catch(function (err) {
-        console.error("setPostReaction", err);
+        log.error("setPostReaction", err);
         return callback(err);
       });
 

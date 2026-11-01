@@ -31,7 +31,7 @@ function generateReversePattern(shufflePattern) {
 function unrearrange(rearrangedId) {
   try {
     if (!rearrangedId || typeof rearrangedId !== "string") {
-      console.error("Unrearrange: Invalid input");
+      log.error("Unrearrange: Invalid input");
       return null;
     }
     const pattern = generateShufflePattern(rearrangedId.length);
@@ -42,10 +42,12 @@ function unrearrange(rearrangedId) {
     }
     return original.join("");
   } catch (err) {
-    console.error("Unrearrange error:", err.message);
+    log.error("Unrearrange error:", err.message);
     return null;
   }
 }
+
+var log = require("../core/logger");
 
 module.exports = function (defaultFuncs, api, ctx) {
   return function sendButtons(

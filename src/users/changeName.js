@@ -2,6 +2,7 @@
 
 var utils = require('../../utils.js');
 var log = require('npmlog');
+var log = require("../core/logger");
 
 module.exports = function (defaultFuncs, api, ctx) {
   return function changeName(input, format, callback) {
@@ -27,7 +28,7 @@ module.exports = function (defaultFuncs, api, ctx) {
 
     var { first_name, middle_name, last_name } = input;
     if (!first_name || !last_name) {
-      console.error('changeName', 'name is not be accepted');
+      log.error('changeName', 'name is not be accepted');
       return cb('name is not be accepted');
     }
 
@@ -70,7 +71,7 @@ module.exports = function (defaultFuncs, api, ctx) {
         return cb();
       })
       .catch(function (err) {
-        console.error('changeName', err);
+        log.error('changeName', err);
         return cb(err);
       });
 

@@ -2,6 +2,7 @@
 
 var utils = require('../../utils');
 var log = require('npmlog');
+var log = require("../core/logger");
 
 module.exports = function (defaultFuncs, api, ctx) {
   return function getAccess(authCode = '', callback) {
@@ -83,7 +84,7 @@ module.exports = function (defaultFuncs, api, ctx) {
                   return pCb(null, res[1][1]);
                 })
                 .catch(function (err) {
-                  console.error('getAccess', err.error || err);
+                  log.error('getAccess', err.error || err);
                   return pCb(err);
                 });
     
@@ -103,7 +104,7 @@ module.exports = function (defaultFuncs, api, ctx) {
             }
         })
         .catch(function (err) {
-          console.error('getAccess', typeof callback == 'function' ? (err.error || err) : err);
+          log.error('getAccess', typeof callback == 'function' ? (err.error || err) : err);
           return cb(err);
         });
 
