@@ -3,6 +3,87 @@
 
 All notable changes to AL-FCA will be documented in this file.
 
+## [2.1.0] - 2026-11-01
+
+Complete security, lifecycle and correctness overhaul. See `AUDIT.md` for the
+full defect inventory and `API_COMPATIBILITY.md` for per-method verification.
+
+### Security (breaking changes, see API_COMPATIBILITY.md §Deliberate changes)
+
+- 🔒 **Auto-update system removed.** On load the library used to run
+  `npm install al-fca@<ver>` via `execSync`, rewrite the consumer's
+  package.json and call `process.exit(2)` — silently, against a package whose
+  identity it never matched. The update check is now notify-only, opt-in
+  (`autoUpdateCheck: true`) and never spawns processes or exits the host.
+- 🔒 **Self-dependency removed** (`"al-fca": "^2.0.0"` pulled a second,
+  foreign copy of the library into every install).
+- 🔒 **Hardcoded ImgBB key removed.** Received photos are no longer silently
+  re-uploaded to third-party image hosts. `uploadImageToImgbb` is explicit and
+  bring-your-own-key; `photoUrlProxy` opts back into hosted URLs.
+- 🔒 **`getUID` no longer forwards profile links to third-party resolver
+  services** and no longer rotates user-agents; it resolves IDs locally with
+  the user's own session.
+- 🔒 **Deprecated `request` replaced** by a maintained internal transport
+  (`src/transport/http-client.js`, `tough-cookie` + `form-data`): npm audit
+  goes from 12 findings (2 critical, 4 high) to **0**. Unused dependencies
+  removed (`bluebird`, `duplexify`, `totp-generator`, `yumi-json-bigint`,
+  `undici`); `npmlog` 1.x → 7.x.
+
+### Memory & lifecycle
+
+- ♻️ Bounded FIFO maps for E2EE message/sender correlation (previously
+  unbounded global Maps that grew forever).
+- ♻️ MQTT reconnect: bounded attempts (default 5), exponential backoff with
+  jitter, cancelled by `stopListening()`, no resurrection after stop; the
+  `/t_ms` sync timeout uses the same path instead of an unbounded loop.
+- ♻️ `stopListening`/`stopListeningAsync` always resolve (previously hung when
+  no client existed) and now also disconnect the E2EE bridge.
+- ♻️ E2EE media server: `closeMediaServer()`, byte-capped cache (128 MB),
+  wired into disconnect; E2EE reconnect capped at 5 attempts.
+- ♻️ Logger no longer overrides `console.log` process-wide, no longer installs
+  a SIGINT handler at require time; `pause()/resume()` now actually work.
+
+### Correctness
+
+- 🐛 Malformed MQTT deltas (broken `prng`/`mercuryJSON`, missing `threadKey`/
+  `cid`) crashed the whole process; they now emit `parse_error` events.
+- 🐛 `utils.CustomError` was referenced by 4 modules but never defined —
+  their validation paths threw `TypeError`.
+- 🐛 `sendMessage`: MQTT ack timeouts no longer trigger a duplicate HTTP
+  re-send (`err.code = MQTT_ACK_TIMEOUT` surfaces instead).
+- 🐛 `sendMessageMqtt`: 32-bit `<<` overflow on otid fixed; non-stream
+  attachments no longer crash; object-form mentions supported; per-instance
+  `request_id`.
+- 🐛 `refreshFb_dtsg` wrote `ctx.jazoest` which nothing read; now updates
+  `ctx.ttstamp` so the refresh takes effect.
+- 🐛 `logout()` now stops MQTT + E2EE before invalidating the session.
+- 🐛 `login()` with no credentials no longer hangs; appstate cookie expiry
+  accepts ISO strings; cookie URLs use https.
+- 🐛 MQTT CONNECT could be silently lost when written before the WebSocket
+  handshake completed — writes are now buffered until open.
+- 🐛 `httpPost` exported a function named `httpGet`; `stopListenMqtt` and the
+  emitter teardown are now one implementation.
+
+### Performance
+
+- ⚡ `makeDefaults` runs once per login (previously ~120×, once per API
+  module, each re-scanning the login HTML); one shared `__req` counter instead
+  of 120 counters restarting at 1.
+- ⚡ Single consolidated config loader (was three duplicated blocks).
+- 📊 Benchmarks and resource behaviour recorded in FINAL_REPORT.md.
+
+### Added
+
+- 🧪 Test suite rebuilt on `node:test`: **61 tests** — HTTP transport
+  integration, fake MQTT broker lifecycle (connect/sync/stop/bounded
+  reconnect/leak cycles), delta-parsing crash regressions, E2EE map/media/
+  mapper tests (synthetic protobuf round-trip), security source guarantees,
+  `npm pack` install probe.
+- 📚 `AUDIT.md`, `API_COMPATIBILITY.md`, `ARCHITECTURE.md`, `SECURITY.md`,
+  `TESTING.md`, `TROUBLESHOOTING.md`, `INTEGRATION_TESTING.md`.
+- ⚙️ New options: `photoUrlProxy`, `autoUpdateCheck`, `reconnectMaxAttempts`,
+  `reconnectBaseDelayMs`, `mqttTmsTimeoutMs`, `imgbbApiKey`.
+
 ## [Unreleased]
 
 ### Added

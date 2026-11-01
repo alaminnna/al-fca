@@ -33,7 +33,7 @@
 
 - [What's New](#-whats-new-in-al-fca)
 - [Installation](#-installation)
-- [Auto-Update](#-auto-update-feature)
+- [Update Notifications](#-update-notifications-opt-in)
 - [Basic Usage](#-basic-usage)
 - [E2EE Encryption](#-e2ee-end-to-end-encryption)
 - [Message Types](#-message-types)
@@ -48,74 +48,59 @@
 <img src="https://capsule-render.vercel.app/api?type=rect&color=gradient&height=3" alt="Animated gradient divider" width="100%"/>
 </div>
 
-## 🌟 What's New in AL-FCA
+## 🌟 What's New in AL-FCA (2.1.0 — quality & security overhaul)
 
-- ✨ Enhanced MQTT connection logging
-- 📋 Clean log format (`HH:MM:SS ICON LEVEL [prefix] message`, e.g. `08:14:02 ✔ OK     Login successful`) with `AL_FCA_LOG_LEVEL` control
-- 🔄 Auto-reconnect with configurable intervals
-- 📊 Better connection status indicators
-- 🎨 Improved console output with colors
-- 🔐 **End-to-End Encryption (E2EE) Support** - Messenger encrypted chats powered by FB-Messenger-E2EE (Signal Protocol + Noise, pure JavaScript — no native binary)
-- 🚀 Automatic update checking and installation
-- 💡 Better error handling and debugging
-- 🔐 Enhanced security and stability
+- 🔒 **Security rewrite**: the auto-update system (which ran `npm install` and restarted your bot without asking) is gone — update checks are notify-only and opt-in; no more hardcoded upload keys; `getUID` no longer sends profile links to third-party resolvers; `npm audit` reports **0 vulnerabilities** (the deprecated `request` stack was replaced)
+- ♻️ **Lifecycle engineering**: bounded reconnect with exponential backoff + jitter, always-resolving `stopListening`, bounded E2EE caches, media-server shutdown — long-running bots no longer leak memory
+- 🐛 **Crash-proof delta parsing**: malformed Messenger payloads emit `parse_error` events instead of killing the process; duplicate-send on ack timeout fixed
+- ⚡ **Performance**: `makeDefaults` once per login (was ~120×), single config loader, 468k deltas/s parsing throughput
+- 🧪 **61 offline tests** (fake MQTT broker, transport integration, crash regressions) — `npm test` never touches Facebook
+- 📚 New docs: [AUDIT.md](AUDIT.md) · [API_COMPATIBILITY.md](API_COMPATIBILITY.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [SECURITY.md](SECURITY.md) · [TESTING.md](TESTING.md) · [TROUBLESHOOTING.md](TROUBLESHOOTING.md) · [INTEGRATION_TESTING.md](INTEGRATION_TESTING.md)
+- 🔐 E2EE support (Signal Protocol + Noise, pure JavaScript) with hardening: bounded correlation maps, capped media cache, shutdown hooks
 
 ## 📦 Installation
 
 ```bash
-npm install al-fca
+npm install @alaminnna/al-fca
 ```
+
+Requires Node.js **>= 18** (`engines` enforced). Reproducible installs: commit
+`package-lock.json` and use `npm ci`.
 
 Or with yarn:
 
 ```bash
-yarn add al-fca
+yarn add @alaminnna/al-fca
 ```
 
-## 🔄 Auto-Update Feature
+## 🔄 Update Notifications (opt-in)
 
-AL-FCA includes an **automatic update system** that keeps your package up-to-date seamlessly:
+AL-FCA **never installs packages, never rewrites your package.json and never
+restarts your process**. (Versions before 2.1.0 did exactly that — see
+[SECURITY.md](SECURITY.md).)
 
-### How It Works
-
-1. 🔍 **Automatic Check**: Checks for updates when you start your bot
-2. 📋 **Shows Changes**: Displays recent changelog updates
-3. 📦 **NPM Update**: Runs `npm install al-fca@latest` automatically
-4. 🔄 **Auto-Restart**: Restarts your bot to apply changes
-
-### For Bot Projects
-
-If you're using AL-FCA in your bot project (like [AL-FCA](https://github.com/alaminnna/AL-FCA)), the package will:
-
-- ✅ Detect when a new version is available
-- ✅ Automatically update to the latest version via npm
-- ✅ Update your `node_modules/al-fca` folder
-- ✅ Restart your bot with the new version
-
-### Manual Update
-
-You can also update manually:
-
-```bash
-npm install al-fca@latest
-```
-
-Or check for updates programmatically:
+To be notified when a newer version exists, opt in once:
 
 ```javascript
-const { checkForFCAUpdate } = require('al-fca/checkUpdate.js');
-await checkForFCAUpdate();
+login({ appState }, { autoUpdateCheck: true, /* ... */ });
 ```
 
-### Update Notifications
+That performs a single read-only GET to the npm registry per process and logs:
+`AL-FCA <latest> is available (installed: <current>). To update, run:
+npm install @alaminnna/al-fca@latest`. You decide when — or whether — to update.
 
-The auto-update system will:
-- Show the current and latest versions
-- Display recent changes from the changelog
-- Inform you when the update is complete
-- Automatically restart your application
+Manual update:
 
-**Note**: Updates are non-blocking and won't interrupt your bot's startup if the update check fails.
+```bash
+npm install @alaminnna/al-fca@latest
+```
+
+Programmatic check (no side effects beyond the registry GET):
+
+```javascript
+const { checkForFCAUpdate } = require("@alaminnna/al-fca/checkUpdate.js");
+const { updateAvailable, latest, current } = await checkForFCAUpdate();
+```
 
 ## ⚠️ Important Disclaimer
 
@@ -145,7 +130,7 @@ Facebook now has an [official API for chat bots](https://developers.facebook.com
 ### 1. Login and Simple Echo Bot
 
 ```javascript
-const login = require("al-fca");
+const login = require("@alaminnna/al-fca");
 
 login({ appState: [] }, (err, api) => {
     if (err) return console.error(err);
@@ -162,7 +147,7 @@ login({ appState: [] }, (err, api) => {
 ### 2. Send Text Message
 
 ```javascript
-const login = require("al-fca");
+const login = require("@alaminnna/al-fca");
 
 login({ appState: [] }, (err, api) => {
     if (err) {
@@ -185,7 +170,7 @@ login({ appState: [] }, (err, api) => {
 ### 3. Send File/Image
 
 ```javascript
-const login = require("al-fca");
+const login = require("@alaminnna/al-fca");
 const fs = require("fs");
 
 login({ appState: [] }, (err, api) => {
@@ -242,7 +227,7 @@ E2EE (End-to-End Encryption) ensures that messages are encrypted on the sender's
 ### E2EE Quick Start
 
 ```javascript
-const login = require("al-fca");
+const login = require("@alaminnna/al-fca");
 const fs = require("fs");
 
 login(
@@ -465,7 +450,7 @@ See [E2EE_GUIDE.md](docs/E2EE_GUIDE.md) for comprehensive documentation includin
 
 ```javascript
 const fs = require("fs");
-const login = require("al-fca");
+const login = require("@alaminnna/al-fca");
 
 const credentials = { appState: [] };
 
@@ -489,7 +474,7 @@ login(credentials, (err, api) => {
 
 ```javascript
 const fs = require("fs");
-const login = require("al-fca");
+const login = require("@alaminnna/al-fca");
 
 login(
     { appState: JSON.parse(fs.readFileSync("appstate.json", "utf8")) },
@@ -513,7 +498,7 @@ login(
 
 ```javascript
 const fs = require("fs");
-const login = require("al-fca");
+const login = require("@alaminnna/al-fca");
 
 login(
     { appState: JSON.parse(fs.readFileSync("appstate.json", "utf8")) },

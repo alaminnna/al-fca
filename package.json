@@ -1,6 +1,6 @@
 {
   "name": "@alaminnna/al-fca",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "AL-FCA — Unofficial Facebook Chat API for Node.js with optional update notifications and End-to-End Encryption (E2EE) support",
   "main": "index.js",
   "files": [
