@@ -61,7 +61,7 @@
 ## 📦 Installation
 
 ```bash
-npm install @alaminnna/al-fca
+npm install al-fca
 ```
 
 Requires Node.js **>= 18** (`engines` enforced). Reproducible installs: commit
@@ -70,7 +70,7 @@ Requires Node.js **>= 18** (`engines` enforced). Reproducible installs: commit
 Or with yarn:
 
 ```bash
-yarn add @alaminnna/al-fca
+yarn add al-fca
 ```
 
 ## 🔄 Update Notifications (opt-in)
@@ -87,18 +87,18 @@ login({ appState }, { autoUpdateCheck: true, /* ... */ });
 
 That performs a single read-only GET to the npm registry per process and logs:
 `AL-FCA <latest> is available (installed: <current>). To update, run:
-npm install @alaminnna/al-fca@latest`. You decide when — or whether — to update.
+npm install al-fca@latest`. You decide when — or whether — to update.
 
 Manual update:
 
 ```bash
-npm install @alaminnna/al-fca@latest
+npm install al-fca@latest
 ```
 
 Programmatic check (no side effects beyond the registry GET):
 
 ```javascript
-const { checkForFCAUpdate } = require("@alaminnna/al-fca/checkUpdate.js");
+const { checkForFCAUpdate } = require("al-fca/checkUpdate.js");
 const { updateAvailable, latest, current } = await checkForFCAUpdate();
 ```
 
@@ -130,7 +130,7 @@ Facebook now has an [official API for chat bots](https://developers.facebook.com
 ### 1. Login and Simple Echo Bot
 
 ```javascript
-const login = require("@alaminnna/al-fca");
+const login = require("al-fca");
 
 login({ appState: [] }, (err, api) => {
     if (err) return console.error(err);
@@ -147,7 +147,7 @@ login({ appState: [] }, (err, api) => {
 ### 2. Send Text Message
 
 ```javascript
-const login = require("@alaminnna/al-fca");
+const login = require("al-fca");
 
 login({ appState: [] }, (err, api) => {
     if (err) {
@@ -170,7 +170,7 @@ login({ appState: [] }, (err, api) => {
 ### 3. Send File/Image
 
 ```javascript
-const login = require("@alaminnna/al-fca");
+const login = require("al-fca");
 const fs = require("fs");
 
 login({ appState: [] }, (err, api) => {
@@ -227,7 +227,7 @@ E2EE (End-to-End Encryption) ensures that messages are encrypted on the sender's
 ### E2EE Quick Start
 
 ```javascript
-const login = require("@alaminnna/al-fca");
+const login = require("al-fca");
 const fs = require("fs");
 
 login(
@@ -450,7 +450,7 @@ See [E2EE_GUIDE.md](docs/E2EE_GUIDE.md) for comprehensive documentation includin
 
 ```javascript
 const fs = require("fs");
-const login = require("@alaminnna/al-fca");
+const login = require("al-fca");
 
 const credentials = { appState: [] };
 
@@ -474,7 +474,7 @@ login(credentials, (err, api) => {
 
 ```javascript
 const fs = require("fs");
-const login = require("@alaminnna/al-fca");
+const login = require("al-fca");
 
 login(
     { appState: JSON.parse(fs.readFileSync("appstate.json", "utf8")) },
@@ -498,7 +498,7 @@ login(
 
 ```javascript
 const fs = require("fs");
-const login = require("@alaminnna/al-fca");
+const login = require("al-fca");
 
 login(
     { appState: JSON.parse(fs.readFileSync("appstate.json", "utf8")) },

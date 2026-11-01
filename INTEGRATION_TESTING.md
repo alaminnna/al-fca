@@ -28,7 +28,7 @@ node --version            # >= 18 required (engines field)
 npm ci                    # reproducible install from package-lock.json
 npm test                  # 61 tests, no network access needed
 npm audit --omit=dev      # expect: found 0 vulnerabilities
-node -e "console.log(typeof require('@alaminnna/al-fca'))"   # 'function'
+node -e "console.log(typeof require('al-fca'))"   # 'function'
 ```
 
 ## Phase B — credential isolation
@@ -45,7 +45,7 @@ node -e "console.log(typeof require('@alaminnna/al-fca'))"   # 'function'
 ## Phase C — smoke login (non-destructive)
 
 ```js
-const login = require("@alaminnna/al-fca");
+const login = require("al-fca");
 const fs = require("fs");
 
 login({ appState: JSON.parse(fs.readFileSync(process.env.APPSTATE_FILE, "utf8")) }, {

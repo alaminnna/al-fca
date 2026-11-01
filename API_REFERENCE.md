@@ -10,7 +10,7 @@ with per-method status, see that file.
 **Tested (offline load path).**
 
 ```js
-const login = require("@alaminnna/al-fca");
+const login = require("al-fca");
 
 // Recommended: appState (cookies)
 login({ appState: require("./appstate.json") }, {

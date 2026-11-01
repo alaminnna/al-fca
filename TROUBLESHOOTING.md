@@ -110,7 +110,7 @@ The auto-update system was removed for security (it ran `npm install` and
 killed your process without consent). Update explicitly:
 
 ```bash
-npm install @alaminnna/al-fca@latest
+npm install al-fca@latest
 ```
 
 Optional, notify-only reminder: `login(appState, { autoUpdateCheck: true })`.

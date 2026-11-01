@@ -6,7 +6,7 @@
  * IMPORTANT (security): this module only *notifies*. It never installs
  * packages, never runs child processes, never modifies package.json and
  * never exits the consumer's application. Updates are the application
- * owner's decision: run `npm install @alaminnna/al-fca@latest` yourself.
+ * owner's decision: run `npm install al-fca@latest` yourself.
  *
  * The check is opt-in: call `checkForFCAUpdate()` explicitly, or pass
  * `autoUpdateCheck: true` in login options to allow a single notify-only
@@ -22,7 +22,7 @@ function _log(level, prefix, msg) {
     if (log && typeof log[level] === "function") log[level](prefix, msg);
 }
 
-const PKG_NAME = "@alaminnna/al-fca";
+const PKG_NAME = "al-fca";
 const REGISTRY_URL = "https://registry.npmjs.org/" + encodeURIComponent(PKG_NAME).replace("%40", "@") + "/latest";
 
 let _checkedThisProcess = false;
