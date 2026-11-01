@@ -606,7 +606,7 @@ api.setOptions({
 All boot, update, MQTT and E2EE status lines go through one styled logger:
 
 ```text
-08:14:02 ✔ OK     AL-FCA is up to date (v2.1.0)
+08:14:02 ✔ OK     AL-FCA is up to date (v2.1.1)
 08:14:03 ℹ INFO   Logging in...
 08:14:05 ⚠ WARN   [setOptions] Unrecognized option given to setOptions: foo
 08:14:06 ✖ ERROR  MQTT send failed, falling back to HTTP

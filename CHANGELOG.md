@@ -3,6 +3,18 @@
 
 All notable changes to AL-FCA will be documented in this file.
 
+## [2.1.1] - 2026-11-02
+
+Documentation release. No runtime changes.
+
+- **README redesigned** with a rendered hero banner and feature art
+  (`assets/readme-hero.png`, `assets/readme-features.png`), generated locally by
+  `scripts/render-readme-assets.ps1`.
+- Node requirement badge now matches `engines` (**>= 18**; the badge
+  previously said >= 16).
+- Quick-start, E2EE, AppState, logging and quick-reference sections
+  restructured into tables and collapsible blocks for readability.
+
 ## [2.1.0] - 2026-11-01
 
 Complete security, lifecycle and correctness overhaul. See `AUDIT.md` for the
